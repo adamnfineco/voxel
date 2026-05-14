@@ -59,6 +59,10 @@ export async function removeServer(serverId: string): Promise<void> {
   await execute("DELETE FROM servers WHERE id = ?", [serverId]);
 }
 
+export async function renameServer(serverId: string, name: string): Promise<void> {
+  await execute("UPDATE servers SET name = ? WHERE id = ?", [name.trim(), serverId]);
+}
+
 export async function touchServer(serverId: string): Promise<void> {
   await execute("UPDATE servers SET last_connected = ? WHERE id = ?", [Date.now(), serverId]);
 }

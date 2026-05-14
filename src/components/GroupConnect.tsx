@@ -15,15 +15,16 @@ import {
   IconWarning,
   IconSpinner,
   IconWifi,
-  IconTrash,
   IconX,
+  IconInfo,
 } from "./icons";
 import type { Server } from "../store/servers";
-import { addServer, removeServer } from "../store/servers";
+import { addServer, removeServer, renameServer } from "../store/servers";
 import { setDisplayName as saveDisplayName } from "../store/identity";
 import { setDisplayName as setStateDisplayName } from "../store/appState";
 import { deriveServerName } from "../runtime/config";
-import { encryptRoomKey } from "../store/keyring";
+import { decryptRoomKey, encryptRoomKey } from "../store/keyring";
+import GroupInfoModal from "./GroupInfoModal";
 
 interface Props {
   groups: Server[];
@@ -70,6 +71,8 @@ const GroupConnect: Component<Props> = (props) => {
 
   // General
   const [connecting, setConnecting] = createSignal<string | null>(null);
+  const [infoServer, setInfoServer] = createSignal<Server | null>(null);
+  const [infoServerKey, setInfoServerKey] = createSignal("");
 
   const handleNameChange = async (val: string) => {
     setName(val);
@@ -137,10 +140,26 @@ const GroupConnect: Component<Props> = (props) => {
     }
   };
 
-  const handleRemove = async (e: MouseEvent, server: Server) => {
+  const openInfo = async (e: MouseEvent, server: Server) => {
     e.stopPropagation();
-    await removeServer(server.id);
+    setInfoServer(server);
+    setInfoServerKey(await decryptRoomKey(server.server_key));
+  };
+
+  const handleRenameGroup = async (newName: string) => {
+    const s = infoServer();
+    if (!s) return;
+    await renameServer(s.id, newName);
     props.onGroupsChange();
+    setInfoServer({ ...s, name: newName });
+  };
+
+  const handleDeleteGroup = async () => {
+    const s = infoServer();
+    if (!s) return;
+    await removeServer(s.id);
+    props.onGroupsChange();
+    setInfoServer(null);
   };
 
   return (
@@ -201,11 +220,11 @@ const GroupConnect: Component<Props> = (props) => {
                       <IconSpinner size={13} color="var(--c-accent)" />
                     </Show>
                     <button
-                      class="pixel-btn pixel-btn-icon danger"
-                      onClick={(e) => handleRemove(e, server)}
-                      title="Remove"
+                      class="pixel-btn pixel-btn-icon"
+                      onClick={(e) => openInfo(e, server)}
+                      title="Group Info"
                     >
-                      <IconTrash size={11} />
+                      <IconInfo size={11} />
                     </button>
                   </div>
                 </div>
@@ -371,6 +390,21 @@ const GroupConnect: Component<Props> = (props) => {
             </button>
           </div>
         </div>
+      </Show>
+
+      {/* Group info modal */}
+      <Show when={infoServer()}>
+        {(s) => (
+          <GroupInfoModal
+            groupName={s().name}
+            groupKey={infoServerKey()}
+            peerCount={0}
+            channelCount={0}
+            onRename={handleRenameGroup}
+            onDelete={handleDeleteGroup}
+            onClose={() => setInfoServer(null)}
+          />
+        )}
       </Show>
     </div>
   );

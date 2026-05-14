@@ -20,7 +20,7 @@
  */
 
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { IconGear, IconLock } from "./components/icons";
+import { IconGear, IconInfo, IconLock } from "./components/icons";
 import {
   identity, setIdentity,
   displayName, setDisplayName,
@@ -45,6 +45,8 @@ import {
   listChannels,
   createChannel,
   deleteChannel,
+  removeServer,
+  renameServer,
   touchServer,
   getRole,
   setRole,
@@ -88,6 +90,7 @@ import MuteBar from "./components/MuteBar";
 import GroupConnect from "./components/GroupConnect";
 import Settings from "./components/Settings";
 import ChannelModal, { type ChannelFormData } from "./components/ChannelModal";
+import GroupInfoModal from "./components/GroupInfoModal";
 import { hashPassword, verifyPassword } from "./store/crypto";
 
 const AFK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -106,6 +109,8 @@ const App: Component = () => {
   const [showPasswordPrompt, setShowPasswordPrompt] = createSignal<Channel | null>(null);
   const [passwordInput, setPasswordInput] = createSignal("");
   const [passwordError, setPasswordError] = createSignal("");
+  const [showGroupInfo, setShowGroupInfo] = createSignal(false);
+  const [groupInfoKey, setGroupInfoKey] = createSignal("");
   const [connectError, setConnectError] = createSignal("");
   const [bootError, setBootError] = createSignal("");
 
@@ -288,6 +293,13 @@ const App: Component = () => {
       }
       setChannels(chs);
 
+      // Auto-join a default channel immediately.
+      // Connected users should always be in some channel, never "floating".
+      const defaultChannel =
+        chs.find((c) => c.name === "Lobby") ??
+        chs.find((c) => !c.is_afk) ??
+        chs[0];
+
       // 14. Assign role (first connection = owner)
       const existingRole = await getRole(server.id, id.id);
       if (!existingRole) {
@@ -303,6 +315,11 @@ const App: Component = () => {
       setConnected(true);
       setConnStatus("connected");
       setView("main");
+
+      // Land in Lobby (or first non-AFK channel) immediately
+      if (defaultChannel) {
+        await doJoinChannel(defaultChannel);
+      }
 
       playSound("connect");
       speak(`Connected to ${server.name}`);
@@ -336,6 +353,8 @@ const App: Component = () => {
     setActiveServer(null);
     setActiveChannel(null);
     setPeers(new Map());
+    setShowGroupInfo(false);
+    setGroupInfoKey("");
     setView("connect");
     setConnectError("");
 
@@ -522,6 +541,30 @@ const App: Component = () => {
 
   const refreshServers = async () => setServers(await listServers());
 
+  const openGroupInfo = async () => {
+    const s = activeServer();
+    if (!s) return;
+    setGroupInfoKey(await decryptRoomKey(s.server_key));
+    setShowGroupInfo(true);
+  };
+
+  const handleRenameActiveGroup = async (newName: string) => {
+    const s = activeServer();
+    if (!s) return;
+    await renameServer(s.id, newName);
+    const updated = { ...s, name: newName };
+    setActiveServer(updated);
+    setServers(await listServers());
+  };
+
+  const handleDeleteActiveGroup = async () => {
+    const s = activeServer();
+    if (!s) return;
+    await handleDisconnect();
+    await removeServer(s.id);
+    await refreshServers();
+  };
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -594,6 +637,14 @@ const App: Component = () => {
               </span>
             </Show>
           </div>
+          <button
+            class="pixel-btn pixel-btn-icon"
+            onClick={openGroupInfo}
+            title="Group Info"
+            style={{ "margin-left": "6px" }}
+          >
+            <IconInfo size={11} />
+          </button>
           <button
             class="pixel-btn pixel-btn-icon"
             onClick={() => setView("settings")}
@@ -683,6 +734,19 @@ const App: Component = () => {
             </div>
           </div>
         )}
+      </Show>
+
+      {/* Active group info/settings */}
+      <Show when={showGroupInfo() && activeServer()}>
+        <GroupInfoModal
+          groupName={activeServer()!.name}
+          groupKey={groupInfoKey()}
+          peerCount={peers().size}
+          channelCount={channels().length}
+          onRename={handleRenameActiveGroup}
+          onDelete={handleDeleteActiveGroup}
+          onClose={() => setShowGroupInfo(false)}
+        />
       </Show>
     </div>
   );
