@@ -1,4 +1,4 @@
-import { Component, createSignal, For, onMount, Show } from "solid-js";
+import { Component, createSignal, createEffect, For, onMount, Show } from "solid-js";
 import {
   IconAudio,
   IconKeyboard,
@@ -50,14 +50,37 @@ const Settings: Component<Props> = (props) => {
   const [switchingDevice, setSwitchingDevice] = createSignal(false);
   const [deviceError, setDeviceError] = createSignal("");
 
-  onMount(async () => {
+  const refreshDevices = async () => {
     try {
+      // On macOS, labels are only populated after mic permission is granted.
+      // enumerateDevices() before permission returns devices with empty labels
+      // and may omit audioinput entirely — so only enumerate after connecting.
       const devices = await listAudioDevices();
-      setInputDevices(devices.filter((d) => d.kind === "audioinput"));
-      setOutputDevices(devices.filter((d) => d.kind === "audiooutput"));
+      const inputs = devices.filter((d) => d.kind === "audioinput");
+      const outputs = devices.filter((d) => d.kind === "audiooutput");
+
+      // If labels are all empty, permission hasn't been granted yet
+      const hasLabels = inputs.some((d) => d.label.length > 0);
+      if (hasLabels || inputs.length > 0) {
+        setInputDevices(inputs);
+        setOutputDevices(outputs);
+        // Pre-select the default device
+        if (inputs.length > 0 && !selectedInput()) setSelectedInput(inputs[0].deviceId);
+        if (outputs.length > 0 && !selectedOutput()) setSelectedOutput(outputs[0].deviceId);
+      }
     } catch {
-      // Permission not yet granted — user must connect first
+      // Silently ignore — devices will be empty with a helpful message shown
     }
+  };
+
+  onMount(async () => {
+    await refreshDevices();
+  });
+
+  // Re-enumerate whenever connected state changes (mic permission just granted)
+  createEffect(() => {
+    connected(); // track signal — re-run effect when connection state changes
+    refreshDevices();
   });
 
   const listenForKey = () => {
@@ -140,7 +163,17 @@ const Settings: Component<Props> = (props) => {
         <Show when={settingsTab() === "audio"}>
 
           <div class="setting-group">
-            <div class="setting-group-label">Devices</div>
+            <div class="row gap-1" style={{ "justify-content": "space-between", "align-items": "center", "margin-bottom": "4px" }}>
+              <div class="setting-group-label" style={{ margin: 0 }}>Devices</div>
+              <button
+                class="pixel-btn"
+                style={{ "font-size": "var(--fs-xs)", padding: "2px 8px" }}
+                onClick={refreshDevices}
+                title="Refresh device list"
+              >
+                Refresh
+              </button>
+            </div>
 
             <div class="setting-row">
               <label>
@@ -148,13 +181,19 @@ const Settings: Component<Props> = (props) => {
                 <Show when={switchingDevice()}>
                   <span class="text-dim text-xs"> — switching…</span>
                 </Show>
-                <Show when={!connected()}>
-                  <span class="text-dim text-xs"> — connect first</span>
-                </Show>
               </label>
               <Show
                 when={inputDevices().length > 0}
-                fallback={<div class="text-dim text-xs">No devices found. Grant mic permission by connecting first.</div>}
+                fallback={
+                  <div class="text-dim text-xs" style={{ "line-height": "1.8" }}>
+                    <Show
+                      when={connected()}
+                      fallback={"Connect to a group first — mic permission is requested on join."}
+                    >
+                      No microphone found. Check System Settings → Privacy → Microphone.
+                    </Show>
+                  </div>
+                }
               >
                 <select
                   class="pixel-input"
@@ -179,7 +218,7 @@ const Settings: Component<Props> = (props) => {
               <label>Output (speakers)</label>
               <Show
                 when={outputDevices().length > 0}
-                fallback={<div class="text-dim text-xs">No output devices found.</div>}
+                fallback={<div class="text-dim text-xs">Connect to a group first to enumerate output devices.</div>}
               >
                 <select
                   class="pixel-input"
@@ -191,7 +230,9 @@ const Settings: Component<Props> = (props) => {
                   </For>
                 </select>
               </Show>
-              <div class="setting-row-hint">Output switching via WebRTC is browser-controlled.</div>
+              <div class="setting-row-hint">
+                Output switching via WebRTC is browser-controlled. Connect first to see devices.
+              </div>
             </div>
           </div>
 
