@@ -1,0 +1,32 @@
+{
+  "name": "voxel",
+  "private": true,
+  "version": "0.1.0-alpha.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node test-signal.mjs",
+    "test:signal": "node test-signal.mjs",
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run typecheck && npm run build && cargo-tauri build --target aarch64-apple-darwin",
+    "dist:dmg": "npm run dist"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-global-shortcut": "^2.2.0",
+    "@tauri-apps/plugin-log": "^2.8.0",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-sql": "^2.2.0",
+    "@tauri-apps/plugin-websocket": "^2.2.0",
+    "solid-js": "^1.9.7"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.1",
+    "typescript": "^5.7.3",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6"
+  }
+}

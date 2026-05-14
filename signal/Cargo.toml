@@ -1,0 +1,27 @@
+[package]
+name = "voxel-signal"
+version = "0.1.0"
+edition = "2021"
+description = "Voxel signaling server — WebRTC peer discovery and gossip relay"
+license = "MIT"
+repository = "https://github.com/adamnfineco/voxel"
+
+[[bin]]
+name = "voxel-signal"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tungstenite = "0.24"
+futures-util = { version = "0.3", features = ["sink", "std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dashmap = "6"
+url = "2"

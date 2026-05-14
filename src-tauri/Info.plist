@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Microphone access — required for voice chat -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Voxel needs microphone access to transmit your voice in group calls.</string>
+
+  <!-- Remove legacy Carbon key from Tauri default template -->
+  <key>LSRequiresCarbon</key>
+  <false/>
+
+  <!-- Copyright -->
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © 2026 adamnfineco. MIT License.</string>
+
+  <!-- Prevent app from appearing in the "Open With" menu for files -->
+  <key>LSHandlerRank</key>
+  <string>None</string>
+</dict>
+</plist>

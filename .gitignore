@@ -1,0 +1,44 @@
+# Rust
+target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# DB
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Docs (private / in flux for now)
+docs/
+doc/
+
+# AI / agent / editor tool state
+.claude/
+.opencode/
+.cursor/
+.windsurf/
+.continue/
+.aider*
+.avante/
+.github/copilot-instructions.md
