@@ -16,15 +16,13 @@ import {
   IconSpinner,
   IconWifi,
   IconX,
-  IconInfo,
 } from "./icons";
 import type { Server } from "../store/servers";
-import { addServer, removeServer, renameServer } from "../store/servers";
+import { addServer } from "../store/servers";
 import { setDisplayName as saveDisplayName } from "../store/identity";
 import { setDisplayName as setStateDisplayName } from "../store/appState";
 import { deriveServerName } from "../runtime/config";
-import { decryptRoomKey, encryptRoomKey } from "../store/keyring";
-import GroupInfoModal from "./GroupInfoModal";
+import { encryptRoomKey } from "../store/keyring";
 
 interface Props {
   groups: Server[];
@@ -32,6 +30,19 @@ interface Props {
   connectError?: string;
   onConnect: (server: Server, name: string) => Promise<void>;
   onGroupsChange: () => void;
+}
+
+/** Format a timestamp as a human-friendly relative string */
+function formatRelative(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 2)  return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** Generate a short human-friendly group key */
@@ -71,8 +82,6 @@ const GroupConnect: Component<Props> = (props) => {
 
   // General
   const [connecting, setConnecting] = createSignal<string | null>(null);
-  const [infoServer, setInfoServer] = createSignal<Server | null>(null);
-  const [infoServerKey, setInfoServerKey] = createSignal("");
 
   const handleNameChange = async (val: string) => {
     setName(val);
@@ -140,28 +149,6 @@ const GroupConnect: Component<Props> = (props) => {
     }
   };
 
-  const openInfo = async (e: MouseEvent, server: Server) => {
-    e.stopPropagation();
-    setInfoServer(server);
-    setInfoServerKey(await decryptRoomKey(server.server_key));
-  };
-
-  const handleRenameGroup = async (newName: string) => {
-    const s = infoServer();
-    if (!s) return;
-    await renameServer(s.id, newName);
-    props.onGroupsChange();
-    setInfoServer({ ...s, name: newName });
-  };
-
-  const handleDeleteGroup = async () => {
-    const s = infoServer();
-    if (!s) return;
-    await removeServer(s.id);
-    props.onGroupsChange();
-    setInfoServer(null);
-  };
-
   return (
     <div class="connect-screen">
       {/* Logo */}
@@ -207,26 +194,25 @@ const GroupConnect: Component<Props> = (props) => {
             </div>
             <For each={props.groups}>
               {(server) => (
-                <div class="server-item" onClick={() => handleConnectExisting(server)}>
+                <div
+                  class="server-item"
+                  onClick={() => handleConnectExisting(server)}
+                  title={`Connect to ${server.name}`}
+                >
                   <div class="server-item-info">
                     <span class="server-item-name">{server.name}</span>
-                    <span class="server-item-url">key: {server.server_key.slice(0, 14)}…</span>
-                  </div>
-                  <div class="row gap-1">
-                    <Show
-                      when={connecting() === server.id}
-                      fallback={<IconArrowRight size={13} color="var(--c-text-dim)" />}
-                    >
-                      <IconSpinner size={13} color="var(--c-accent)" />
+                    <Show when={server.last_connected}>
+                      <span class="server-item-url">
+                        last used {formatRelative(server.last_connected!)}
+                      </span>
                     </Show>
-                    <button
-                      class="pixel-btn pixel-btn-icon"
-                      onClick={(e) => openInfo(e, server)}
-                      title="Group Info"
-                    >
-                      <IconInfo size={11} />
-                    </button>
                   </div>
+                  <Show
+                    when={connecting() === server.id}
+                    fallback={<IconArrowRight size={13} color="var(--c-text-dim)" />}
+                  >
+                    <IconSpinner size={13} color="var(--c-accent)" />
+                  </Show>
                 </div>
               )}
             </For>
@@ -392,20 +378,6 @@ const GroupConnect: Component<Props> = (props) => {
         </div>
       </Show>
 
-      {/* Group info modal */}
-      <Show when={infoServer()}>
-        {(s) => (
-          <GroupInfoModal
-            groupName={s().name}
-            groupKey={infoServerKey()}
-            peerCount={0}
-            channelCount={0}
-            onRename={handleRenameGroup}
-            onDelete={handleDeleteGroup}
-            onClose={() => setInfoServer(null)}
-          />
-        )}
-      </Show>
     </div>
   );
 };
