@@ -2,8 +2,11 @@
  * Push-to-Talk manager.
  * Uses Tauri's global-shortcut plugin — works when app is backgrounded.
  *
- * Key format: Tauri uses strings like "Space", "Alt+F4", "CmdOrControl+Shift+P"
- * We convert from KeyboardEvent.code (e.g. "ControlLeft") to Tauri format.
+ * Default PTT key: Backquote (`) — top-left key, near Escape.
+ * Zero conflict with typing. Common gaming PTT key.
+ *
+ * Key format: Tauri uses "A", "Control+A", "Alt+F4", etc.
+ * We capture full combos including modifiers during the listen phase.
  */
 
 import { register, unregister, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
@@ -11,7 +14,8 @@ import { setMicMuted } from "./mesh";
 import { duck, unduck } from "./ducking";
 import { playSound } from "./sounds";
 
-let _pttKey = "Space";  // Tauri shortcut string
+// Default: backtick/tilde key — no typing conflicts, universal reach
+let _pttKey = "Backquote";
 let _registered = false;
 let _pttActive = false;
 let _onPttChange: ((active: boolean) => void) | null = null;
@@ -24,31 +28,41 @@ export function getCurrentKey(): string {
   return _pttKey;
 }
 
-export function getCurrentKeyDisplay(): string {
-  return _pttKey;
-}
+// ─── Key format conversion ────────────────────────────────────────────────────
+
+const MODIFIER_CODES = new Set([
+  "ControlLeft", "ControlRight",
+  "ShiftLeft", "ShiftRight",
+  "AltLeft", "AltRight",
+  "MetaLeft", "MetaRight",
+]);
+
 
 /**
- * Convert a KeyboardEvent.code string to a Tauri-compatible shortcut string.
- * e.g. "ControlLeft" → "Control", "KeyA" → "A", "Space" → "Space"
+ * Convert a KeyboardEvent into a Tauri shortcut string.
+ * Captures full modifier combos: Ctrl+A, Alt+F4, etc.
+ * e.g. KeyboardEvent{ctrlKey, code:"KeyA"} → "Control+A"
  */
-export function codeToTauriKey(code: string): string {
-  // Modifier-only keys (Tauri doesn't support bare modifiers as shortcuts)
-  const modifierMap: Record<string, string> = {
-    ControlLeft:  "Control",
-    ControlRight: "Control",
-    ShiftLeft:    "Shift",
-    ShiftRight:   "Shift",
-    AltLeft:      "Alt",
-    AltRight:     "Alt",
-    MetaLeft:     "Super",
-    MetaRight:    "Super",
-  };
+export function eventToTauriKey(e: KeyboardEvent): string | null {
+  // Pure modifier press — not a valid PTT key alone
+  if (MODIFIER_CODES.has(e.code)) return null;
 
-  if (modifierMap[code]) return modifierMap[code];
+  const key = codeToKey(e.code);
+  if (!key) return null;
 
-  // Function keys
-  if (/^F(\d+)$/.test(code)) return code; // F1-F12
+  const mods: string[] = [];
+  if (e.ctrlKey)  mods.push("Control");
+  if (e.altKey)   mods.push("Alt");
+  if (e.shiftKey) mods.push("Shift");
+  if (e.metaKey)  mods.push("Super");
+
+  return mods.length > 0 ? `${mods.join("+")}+${key}` : key;
+}
+
+/** Convert a KeyboardEvent.code to a Tauri key name (no modifiers) */
+function codeToKey(code: string): string | null {
+  // Function keys F1–F12
+  if (/^F(\d{1,2})$/.test(code)) return code;
 
   // Letter keys: "KeyA" → "A"
   const keyMatch = code.match(/^Key([A-Z])$/);
@@ -58,69 +72,75 @@ export function codeToTauriKey(code: string): string {
   const digitMatch = code.match(/^Digit(\d)$/);
   if (digitMatch) return digitMatch[1];
 
-  // Numpad: "Numpad0" → "Num0"
+  // Numpad
   const numpadMatch = code.match(/^Numpad(\d)$/);
   if (numpadMatch) return `Num${numpadMatch[1]}`;
 
-  // Known special keys
   const specialMap: Record<string, string> = {
-    Space:        "Space",
-    Enter:        "Return",
-    Escape:       "Escape",
-    Tab:          "Tab",
-    Backspace:    "Backspace",
-    Delete:       "Delete",
-    Insert:       "Insert",
-    Home:         "Home",
-    End:          "End",
-    PageUp:       "PageUp",
-    PageDown:     "PageDown",
-    ArrowUp:      "Up",
-    ArrowDown:    "Down",
-    ArrowLeft:    "Left",
-    ArrowRight:   "Right",
-    CapsLock:     "CapsLock",
-    PrintScreen:  "Print",
-    ScrollLock:   "ScrollLock",
-    Pause:        "Pause",
-    NumpadEnter:  "NumpadEnter",
-    NumpadAdd:    "NumpadAdd",
-    NumpadSubtract: "NumpadSubtract",
-    NumpadMultiply: "NumpadMultiply",
-    NumpadDivide:   "NumpadDivide",
-    NumpadDecimal:  "NumpadDecimal",
-    Minus:        "Minus",
-    Equal:        "Equal",
-    BracketLeft:  "BracketLeft",
-    BracketRight: "BracketRight",
-    Backslash:    "Backslash",
-    Semicolon:    "Semicolon",
-    Quote:        "Quote",
-    Comma:        "Comma",
-    Period:       "Period",
-    Slash:        "Slash",
-    Backquote:    "Backquote",
+    Backquote:       "Backquote",  // ` / ~ — DEFAULT PTT KEY
+    Space:           "Space",
+    Enter:           "Return",
+    Escape:          "Escape",
+    Tab:             "Tab",
+    Backspace:       "Backspace",
+    Delete:          "Delete",
+    Insert:          "Insert",
+    Home:            "Home",
+    End:             "End",
+    PageUp:          "PageUp",
+    PageDown:        "PageDown",
+    ArrowUp:         "Up",
+    ArrowDown:       "Down",
+    ArrowLeft:       "Left",
+    ArrowRight:      "Right",
+    CapsLock:        "CapsLock",
+    Minus:           "Minus",
+    Equal:           "Equal",
+    BracketLeft:     "BracketLeft",
+    BracketRight:    "BracketRight",
+    Backslash:       "Backslash",
+    Semicolon:       "Semicolon",
+    Quote:           "Quote",
+    Comma:           "Comma",
+    Period:          "Period",
+    Slash:           "Slash",
+    NumpadEnter:     "NumpadEnter",
+    NumpadAdd:       "NumpadAdd",
+    NumpadSubtract:  "NumpadSubtract",
+    NumpadMultiply:  "NumpadMultiply",
+    NumpadDivide:    "NumpadDivide",
+    NumpadDecimal:   "NumpadDecimal",
+    PrintScreen:     "Print",
+    ScrollLock:      "ScrollLock",
+    Pause:           "Pause",
   };
 
-  return specialMap[code] ?? code;
+  return specialMap[code] ?? null;
 }
 
-/**
- * Human-readable label for a Tauri key string.
- */
+/** Human-readable display label for a Tauri key string */
 export function keyDisplayLabel(tauriKey: string): string {
   const labels: Record<string, string> = {
-    Space:   "SPACE",
-    Return:  "ENTER",
-    Escape:  "ESC",
-    Control: "CTRL",
-    Shift:   "SHIFT",
-    Alt:     "ALT",
-    Super:   "CMD",
-    Up:      "↑", Down: "↓", Left: "←", Right: "→",
+    Backquote: "` (backtick)",
+    Space:     "SPACE",
+    Return:    "ENTER",
+    Escape:    "ESC",
+    Control:   "CTRL",
+    Shift:     "SHIFT",
+    Alt:       "ALT",
+    Super:     "CMD",
+    Up: "↑", Down: "↓", Left: "←", Right: "→",
+    CapsLock:  "CAPS",
   };
-  return labels[tauriKey] ?? tauriKey.toUpperCase();
+
+  // Handle combos like "Control+A"
+  return tauriKey
+    .split("+")
+    .map(part => labels[part] ?? part.toUpperCase())
+    .join(" + ");
 }
+
+// ─── Register / unregister ────────────────────────────────────────────────────
 
 export async function registerPTT(tauriKey: string): Promise<void> {
   if (_registered) await unregisterPTT();
@@ -144,10 +164,10 @@ export async function registerPTT(tauriKey: string): Promise<void> {
       }
     });
     _registered = true;
-    setMicMuted(true); // start muted
+    setMicMuted(true); // start muted in PTT mode
   } catch (e) {
     console.error("[ptt] failed to register:", tauriKey, e);
-    throw e; // propagate so App.tsx can surface the error
+    throw e;
   }
 }
 
@@ -156,7 +176,6 @@ export async function unregisterPTT(): Promise<void> {
   try {
     await unregister(_pttKey);
   } catch {
-    // If unregister fails (e.g. already unregistered), try unregisterAll as fallback
     try { await unregisterAll(); } catch {}
   }
   _registered = false;

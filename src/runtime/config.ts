@@ -13,7 +13,8 @@
  * For now this points at localhost for development.
  * Later we can switch this to a hosted default, sidecar, or registry.
  */
-export const DEFAULT_SIGNAL_URL = "ws://localhost:8080";
+// Rendezvous server — swap to wss://voxel.damnfine.xyz once DNS + TLS is set up
+export const DEFAULT_SIGNAL_URL = "ws://dfn01.damnfine.xyz:8080";
 
 /**
  * Human-friendly server nickname if the user doesn't provide one.
