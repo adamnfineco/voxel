@@ -27,6 +27,9 @@ import {
 import { setDuckingEnabled } from "../audio/ducking";
 import { setThreshold, setSilenceHold } from "../audio/vad";
 import { getSwitchInputHandler } from "../runtime/bridge";
+import { getAppPref, setAppPref } from "../store/db";
+import { DEFAULT_SIGNAL_URL } from "../runtime/config";
+import { SIGNAL_URL_PREF_KEY } from "../runtime/sidecar";
 
 interface Props {
   onClose: () => void;
@@ -49,6 +52,8 @@ const Settings: Component<Props> = (props) => {
   const [ttsRate, setTtsRateLocal] = createSignal(1.0);
   const [switchingDevice, setSwitchingDevice] = createSignal(false);
   const [deviceError, setDeviceError] = createSignal("");
+  const [signalUrl, setSignalUrl] = createSignal(DEFAULT_SIGNAL_URL);
+  const [signalUrlSaved, setSignalUrlSaved] = createSignal(false);
 
   const refreshDevices = async () => {
     try {
@@ -75,6 +80,8 @@ const Settings: Component<Props> = (props) => {
 
   onMount(async () => {
     await refreshDevices();
+    const stored = await getAppPref(SIGNAL_URL_PREF_KEY).catch(() => null);
+    if (stored && stored.trim()) setSignalUrl(stored.trim());
   });
 
   // Re-enumerate whenever connected state changes (mic permission just granted)
@@ -437,12 +444,47 @@ const Settings: Component<Props> = (props) => {
           </div>
 
           <div class="setting-group">
-            <div class="setting-group-label">Signal Server</div>
+            <div class="setting-group-label">Rendezvous Server</div>
+            <div class="setting-row">
+              <label>Signal URL</label>
+              <input
+                class="pixel-input"
+                type="text"
+                value={signalUrl()}
+                onInput={(e) => {
+                  setSignalUrl(e.currentTarget.value);
+                  setSignalUrlSaved(false);
+                }}
+                onBlur={async () => {
+                  const val = signalUrl().trim() || DEFAULT_SIGNAL_URL;
+                  setSignalUrl(val);
+                  await setAppPref(SIGNAL_URL_PREF_KEY, val);
+                  setSignalUrlSaved(true);
+                  setTimeout(() => setSignalUrlSaved(false), 2000);
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }
+                }}
+              />
+              <Show when={signalUrlSaved()}>
+                <div class="setting-row-hint" style={{ color: "var(--c-speaking)" }}>Saved — takes effect on next connect.</div>
+              </Show>
+              <div class="setting-row-hint">
+                Default: <span style={{ color: "var(--c-text-mid)" }}>{DEFAULT_SIGNAL_URL}</span>.
+                Self-hosters can point this at their own voxel-signal instance.
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-group">
+            <div class="setting-group-label">Self-hosting</div>
             <div class="text-dim text-xs" style={{ "line-height": "2" }}>
-              Run: <span style={{ color: "var(--c-text-mid)" }}>cargo run --release</span><br />
-              Default port: <span style={{ color: "var(--c-text-mid)" }}>8080</span><br />
-              Override: <span style={{ color: "var(--c-text-mid)" }}>BIND_ADDR=0.0.0.0:9090</span><br />
-              Docker: <span style={{ color: "var(--c-text-mid)" }}>docker build -t voxel-signal ./signal</span>
+              Run: <span style={{ color: "var(--c-text-mid)" }}>cargo run --release -p voxel-signal</span><br />
+              Port override: <span style={{ color: "var(--c-text-mid)" }}>BIND_ADDR=0.0.0.0:9090</span><br />
+              Docker: <span style={{ color: "var(--c-text-mid)" }}>docker build -t voxel-signal ./signal</span><br />
+              Deploy guide: <span style={{ color: "var(--c-text-mid)" }}>signal/deploy/README.md</span>
             </div>
           </div>
         </Show>

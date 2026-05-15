@@ -11,6 +11,20 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_SIGNAL_URL } from "./config";
+import { getAppPref } from "../store/db";
+
+export const SIGNAL_URL_PREF_KEY = "signal_url";
+
+/** Returns the user-configured rendezvous URL, or the compiled-in default. */
+export async function getConfiguredSignalUrl(): Promise<string> {
+  try {
+    const stored = await getAppPref(SIGNAL_URL_PREF_KEY);
+    if (stored && stored.trim()) return stored.trim();
+  } catch {
+    // DB not ready yet — fall through to default
+  }
+  return DEFAULT_SIGNAL_URL;
+}
 
 const PROBE_TIMEOUT_MS = 2000;
 
@@ -56,19 +70,22 @@ function isTauri(): boolean {
 
 /**
  * Get the rendezvous URL to use.
- * Tries DEFAULT_SIGNAL_URL first; if unreachable, starts the sidecar.
+ * Tries the configured URL first (user override or compiled default);
+ * if unreachable, falls back to the embedded sidecar.
  */
 export async function getRendezvousUrl(): Promise<string> {
-  // First check if the default endpoint is reachable
-  const defaultReachable = await isReachable(DEFAULT_SIGNAL_URL);
+  const configuredUrl = await getConfiguredSignalUrl();
+
+  // First check if the configured endpoint is reachable
+  const defaultReachable = await isReachable(configuredUrl);
   if (defaultReachable) {
-    return DEFAULT_SIGNAL_URL;
+    return configuredUrl;
   }
 
   // If not in Tauri, we can't start the sidecar
   if (!isTauri()) {
     console.warn("[sidecar] default rendezvous unreachable and no Tauri runtime");
-    return DEFAULT_SIGNAL_URL; // fallback — connection will fail with an error
+    return configuredUrl; // fallback — connection will fail with an error
   }
 
   // Start the embedded sidecar
@@ -101,7 +118,7 @@ export async function getRendezvousUrl(): Promise<string> {
     return url;
   } catch (e) {
     console.error("[sidecar] failed to start:", e);
-    return DEFAULT_SIGNAL_URL;
+    return configuredUrl;
   }
 }
 

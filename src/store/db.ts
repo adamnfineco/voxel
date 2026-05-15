@@ -91,6 +91,23 @@ export async function getDb(): Promise<Database> {
   return _db;
 }
 
+// ─── App prefs ────────────────────────────────────────────────────────────────
+
+export async function getAppPref(key: string): Promise<string | null> {
+  const rows = await query<{ value: string }>(
+    "SELECT value FROM app_prefs WHERE key = ?",
+    [key]
+  );
+  return rows.length > 0 ? rows[0].value : null;
+}
+
+export async function setAppPref(key: string, value: string): Promise<void> {
+  await execute(
+    "INSERT OR REPLACE INTO app_prefs (key, value) VALUES (?, ?)",
+    [key, value]
+  );
+}
+
 // Generic query helpers
 export async function query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
   const db = await getDb();

@@ -1,0 +1,31 @@
+[Unit]
+Description=Voxel Signal Server
+Documentation=https://github.com/adamnfineco/voxel
+After=network.target
+
+[Service]
+Type=simple
+User=voxel
+Group=voxel
+WorkingDirectory=/home/voxel
+
+ExecStart=/home/voxel/bin/voxel-signal
+Restart=on-failure
+RestartSec=5
+
+Environment=BIND_ADDR=127.0.0.1:8765
+Environment=RUST_LOG=info
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voxel-signal
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/voxel
+
+[Install]
+WantedBy=multi-user.target

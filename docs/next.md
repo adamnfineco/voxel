@@ -1,6 +1,6 @@
 # Voxel — Next Steps, History, and Open Questions
 
-_Last updated: 2026-05-14_
+_Last updated: 2026-05-15_
 
 ---
 
@@ -32,6 +32,12 @@ Then the question came: can we make it serverless? The whole thing is mesh, ever
 
 9. **"We can't call it v0.1 until it actually works."** — Agreed. Tagged `v0.1.0-alpha.1`. v0.1.0 gets tagged when two real people talk to each other successfully.
 
+10. **"You cannot default to spacebar, it breaks typing."** — Switched default PTT to `` ` `` (Backquote). Zero typing conflicts. Also fixed modifier combo capture — `Ctrl+A`, `Alt+1` etc. now work as PTT keys.
+
+11. **"Stina connected to the same server but we didn't find each other."** — Root cause: sidecar spawns a local server on each machine. Two `localhost:8080` instances that never talk. Fixed by deploying `voxel-signal` on `dfn01.damnfine.xyz:8080` as the shared rendezvous. Domain `voxel.damnfine.xyz` being set up.
+
+12. **"You cannot bind multi keys with modifiers (e.g. Ctrl+A)."** — Fixed. `eventToTauriKey()` captures the full modifier combo during keybind setup. Pure modifier presses are ignored — waits for an actual key.
+
 ---
 
 ## Architecture Decisions (why things are the way they are)
@@ -44,12 +50,32 @@ Full ADR records in `docs/adr/` — this is the condensed version.
 | Audio | WebRTC mesh (peer-to-peer) | SFU/LiveKit = audio through a server = privacy risk. |
 | State | Local SQLite + gossip | Central DB violates zero-cloud goal. CRDT overkill. |
 | Trust | Shared server key + HMAC | Per-user keypairs add complexity without user benefit. |
-| Rendezvous | Hidden, auto-started sidecar | Exposing a URL field broke the product feel. |
+| Rendezvous | Hidden, auto-started sidecar + hosted fallback | Exposing a URL field broke the product feel. |
 | E2EE | AES-GCM 256 via HKDF | Transport encryption (DTLS-SRTP) already existed. App layer gives stronger guarantees. |
 | Key storage | AES-GCM encrypted in SQLite | Plaintext keys in a backup = anyone can join your rooms. |
 | macOS UX | Regular activation (Dock + Cmd+Tab + tray) | Pure Accessory = hidden from app switcher, felt broken. |
 | Icons | Inline SVGs | React icon libraries crash Solid apps at runtime. |
 | Naming | "Group" not "Server" | Every client is a mesh node, not a server. |
+| PTT default | Backquote (`` ` ``) | Space breaks typing. CapsLock unreliable at OS level. |
+
+---
+
+## Current Infrastructure
+
+### Rendezvous server
+
+- Running on `voxel.damnfine.xyz` — dedicated Virtualmin account on dfn01
+- Binary: `/home/voxel/bin/voxel-signal` — built from `signal/` in the repo
+- Managed by systemd: `systemctl status voxel-signal`
+- Logs: `journalctl -u voxel-signal -f`
+- Binds to `127.0.0.1:8765`, Apache proxies `wss://voxel.damnfine.xyz` → it
+- Restart: `systemctl restart voxel-signal`
+- Redeploy: `./scripts/deploy-signal.sh` (cross-compiles locally, SCPs binary, restarts)
+- `DEFAULT_SIGNAL_URL` in `src/runtime/config.ts` is `wss://voxel.damnfine.xyz` ✓
+
+### Signal URL is now user-configurable
+
+Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`. Persisted in `app_prefs` SQLite table. Self-hosters can point it at their own instance. Takes effect on next connect.
 
 ---
 
@@ -59,12 +85,14 @@ Full ADR records in `docs/adr/` — this is the condensed version.
 - Create a group → auto-generated readable key (`echo-golf-491`)
 - Join a group → enter key, pick a name, land immediately in Lobby
 - Channel tree: nested channels, sub-channels, users under their channel
-- PTT (global hotkey, works backgrounded) + voice activation
+- PTT (`` ` `` default, global hotkey, works backgrounded, modifier combos supported) + voice activation
 - Speaking indicators, mic level meter, audio ducking
 - AFK channel auto-move + auto-mute on idle
 - Queued channels: one speaker at a time, floor enforced
 - Channel passwords (SHA-256 hash, prompted on join)
 - Max users per channel, enforced on join
+- Group info modal: key display + copy, rename, delete with confirmation
+- Connection status dot (green/amber/red) + peer count in header
 
 ### Security
 - App-layer E2EE: HKDF → AES-GCM 256 → RTCRtpScriptTransform worker
@@ -74,23 +102,27 @@ Full ADR records in `docs/adr/` — this is the condensed version.
 
 ### Infrastructure
 - Rust rendezvous server hidden from users
-- Embedded sidecar binary in the app bundle — auto-spawns if no external server reachable
+- Embedded sidecar binary in app bundle — auto-spawns if no external server reachable
+- Hosted rendezvous on dfn01 for real-world testing
 - HMAC auth on gossip, message size limits, input validation, room isolation
 - 21-test integration suite: `npm test`
 
 ### UX polish
-- Group Info modal: see key, copy, rename, delete with confirmation
-- Settings re-enumerates devices after mic permission granted
+- Group info modal: key, peer count, channel count, rename, delete with confirmation
+- Settings re-enumerates devices after mic permission granted + Refresh button
 - Connection status dot (green/amber/red) in header
 - Peer count in header
 - Font sizes bumped ~28% across the board
 - CRT scanline overlay, pixel art borders, Press Start 2P font
 - System tray icon, click to toggle window, close = hide not quit
 - Fatal error overlay (shows real error instead of black screen)
+- xattr fix documented for macOS quarantine on distributed .app
 
 ### Docs
 - `docs/system-design.md` — full architecture reference
 - `docs/adr/` — 11 ADRs, one per major decision
+- `docs/next.md` — this file
+- `docs/transcript.md` — full session transcript (gitignored, iCloud only)
 - `AGENTS.md` — session ramp-up for future AI sessions
 - `CONTRIBUTING.md` — setup, commands, versioning, ADR practice
 - `README.md` — product-focused
@@ -102,40 +134,38 @@ Full ADR records in `docs/adr/` — this is the condensed version.
 
 ### Must-have before v0.1.0
 
-These block calling it "works":
-
-- [ ] **End-to-end voice validated** — two real people on different machines, talking to each other. Nothing else matters until this works.
-- [ ] **Sidecar connects two machines** — the auto-spawn flow needs to work over a real network, not just localhost.
-- [ ] **PTT confirmed backgrounded** — global hotkey fires correctly when Voxel is in the background and another app is focused.
-- [ ] **Channel switch sound events actually play** — sounds are synthesised but AudioContext may be suspended at play time in some flows.
+- [ ] **End-to-end voice validated** — two real people on different machines, talking to each other. Mark + Stina test. Nothing else matters until this works.
+- [x] **`voxel.damnfine.xyz` domain + WebSocket proxy** — Virtualmin account + Apache vhost + systemd + TLS. Done.
+- [ ] **PTT confirmed backgrounded** — global hotkey fires correctly when Voxel is in background.
+- [ ] **Channel switch sounds actually play** — AudioContext may be suspended at play time in some flows.
+- [ ] **xattr documented in README** — so anyone distributing the .app knows about the macOS quarantine issue.
 
 ### High priority (v0.1.x patch work)
 
-- [ ] **Promote/demote admin in UI** — the gossip layer supports it, the right-click menu has it, but it needs testing end-to-end.
-- [ ] **Reconnect UX** — show "reconnecting..." in UI when signaling drops. Currently shows stale "connected" state.
-- [ ] **Name-taken UX** — the server sends `name_taken`, the frontend handles it, but it needs testing with two clients.
-- [ ] **AFK channel sync** — when peer A moves user B to AFK, does B's client actually receive the gossip and reflect it? Untested.
-- [ ] **Channel password sync** — created with a password, synced via gossip, enforced on join. Works locally but needs multi-peer test.
+- [ ] **Reconnect UX** — show "reconnecting..." when signaling drops. Currently shows stale "connected" state.
+- [ ] **Name-taken UX** — server sends `name_taken`, frontend handles it, needs real-world test.
+- [ ] **AFK channel sync** — when peer A moves user B to AFK, does B's client actually receive the gossip? Untested.
+- [ ] **Make rendezvous server resilient** — currently a bare background process on dfn01. Needs: systemd unit file so it auto-restarts on crash/reboot.
+- [ ] **Promote/demote admin end-to-end** — gossip layer + right-click menu both work, needs real multi-peer test.
 
-### Medium priority (v0.2.0 features)
+### Medium priority (v0.2.0)
 
-- [ ] **Sidecar address sharing** — encode the auto-hosted rendezvous address in the group key so peers can find each other without a hosted server. Format: `word-word-NNN@host:port`. See ADR-011.
-- [ ] **WSS/TLS in production** — the signal server is plain WS. Need nginx/caddy reverse proxy + cert for any real deployment. Guide is in README, implementation is external.
-- [ ] **Hosted rendezvous** — a `voxel.*` domain running the signal server so zero config is actually zero config for users who don't self-host.
-- [ ] **Key rotation** — if a room key leaks, there's no way to rotate it without creating a new group. Need "regenerate key" in Group Info.
-- [ ] **User comment field** — Ventrilo had per-user comments visible to others in the channel. Simple gossip message, adds presence richness.
-- [ ] **Forward secrecy** — current E2EE has no forward secrecy. If the room key leaks, old recordings could be decrypted. Signal-style ratchet is the upgrade path but complex.
-- [ ] **macOS Keychain storage** — room keys currently encrypted via UUID-derived key (better than plaintext, but not as strong as OS keychain). `tauri-plugin-stronghold` when it stabilises.
+- [ ] **`wss://` + TLS** — once Apache proxy is live, add Let's Encrypt cert via Virtualmin. Moves from `ws://` to `wss://`.
+- [ ] **Sidecar address sharing** — encode rendezvous host in group key so LAN/self-hosted works without a central server. Format: `word-word-NNN@host:port`. See ADR-011.
+- [ ] **Key rotation** — "regenerate key" in Group Info for when a key leaks.
+- [ ] **User comment field** — per-user comments visible to others in channel tree.
+- [ ] **Forward secrecy** — current E2EE has no forward secrecy. Signal-style ratchet is the upgrade path.
+- [ ] **macOS Keychain storage** — room keys currently encrypted via UUID-derived key. `tauri-plugin-stronghold` when it stabilises.
+- [ ] **Systemd service for voxel-signal** — so dfn01 rendezvous survives reboots.
 
 ### Low priority / polish
 
-- [ ] **Custom app icon** — still using default Tauri icons. Need a real pixel art Voxel icon in `.icns` format.
-- [ ] **Windows/Linux build** — Tauri supports it, the code is cross-platform, but untested. Probably needs minor audio API adjustments.
-- [ ] **QR code for group join** — generate a QR from the group key so mobile users can join without typing the key.
-- [ ] **In-channel user comments** — right-click → set comment, visible to all peers in channel tree.
-- [ ] **Peer connection quality** — RTCPeerConnection stats API can give round-trip time and packet loss. Surface as a small indicator per user.
-- [ ] **Channel reorder** — sort_order field exists in DB, no UI to drag-reorder channels yet.
-- [ ] **Test: E2EE frame encryption** — need a unit test that verifies audio frames are actually encrypted, not just that the code path runs.
+- [ ] **Custom app icon** — still using default Tauri icons. Need a real pixel art Voxel icon.
+- [ ] **Windows/Linux build** — Tauri supports it, untested.
+- [ ] **QR code for group join** — generate a QR from the group key for mobile sharing.
+- [ ] **Peer connection quality** — RTCPeerConnection stats API → round-trip time, packet loss indicator per user.
+- [ ] **Channel reorder** — sort_order field exists in DB, no drag UI yet.
+- [ ] **Test: E2EE frame encryption** — unit test verifying audio frames are actually encrypted.
 
 ---
 
@@ -143,27 +173,25 @@ These block calling it "works":
 
 ### Technical unknowns
 
-1. **WKWebView and RTCRtpScriptTransform under real conditions** — E2EE uses Insertable Streams which require macOS 12.3+ (WebKit 615+). Haven't tested this on a real audio call with encryption enabled. If WKWebView has a bug with script transforms, we may need a fallback path.
+1. **WKWebView + RTCRtpScriptTransform under real conditions** — E2EE uses Insertable Streams (macOS 12.3+). Untested on a real audio call with encryption enabled.
 
-2. **Gossip sync under real network conditions** — the vector clock + HMAC gossip works in tests and on localhost. On real networks with packet loss, reconnects, and clock skew, there may be edge cases. Specifically: what happens if peer A creates a channel while peer B is briefly disconnected? Does B catch up correctly on reconnect?
+2. **Gossip sync under real network conditions** — works in tests on localhost. On real networks with packet loss and reconnects, edge cases possible. Specifically: peer creates channel while other peer briefly disconnected — does catch-up work?
 
-3. **14-peer mesh scalability** — we capped at 14 based on theoretical analysis. Actual CPU/bandwidth at 14 peers with E2EE encryption on every frame is untested. May need to lower the cap.
+3. **14-peer mesh scalability** — capped at 14 based on theory. Real CPU/bandwidth at 14 peers with E2EE on every frame is untested.
 
-4. **Sidecar NAT traversal** — the embedded rendezvous sidecar binds to 127.0.0.1. For peers on different machines to find each other through it, they'd need to know the creator's public IP. The current sidecar plan only works on LAN or if the address is encoded in the key. Need to validate this assumption.
+4. **Sidecar NAT traversal** — embedded rendezvous binds to `127.0.0.1`. For remote peers to use it, they'd need to know the creator's public IP. Sidecar currently only works on LAN or with address encoded in key.
 
-5. **AudioContext autoplay policy** — browsers (and WKWebView) require a user gesture before an AudioContext can start. We resume on connect, which is user-initiated. But if the context suspends again mid-session (background tab behaviour), sounds and ducking would stop working silently.
+5. **AudioContext autoplay policy** — resumed on connect (user gesture). But may suspend again mid-session in background. Sounds + ducking would stop silently.
 
 ### Product unknowns
 
-1. **The right group key UX** — `echo-golf-491` is readable and shareable. But does it feel right? Should there be a shorter numeric PIN option? Should the key be visible in the tray menu?
+1. **Hosted vs self-hosted rendezvous** — should `voxel.damnfine.xyz` be the permanent public default? Changes from "zero infrastructure" to "we run matchmaking only, can't hear you." Probably the right call for v1.
 
-2. **First-time user flow** — there's no onboarding. A brand new user opens the app, sees "VOXEL", two buttons, and a name field. Is that enough? Or do we need a quick "here's how this works" screen?
+2. **First-time user flow** — no onboarding. New user sees "VOXEL" and two buttons. Is that enough or do we need a one-liner "here's how this works"?
 
-3. **The "I'm already talking to someone" problem** — if you're in a queued channel and someone else starts talking, your mic is muted. There's no visual indication to _you_ that this happened. You might think PTT is broken.
+3. **The "floor grabbed silently" problem** — in queued channels, if someone else starts talking your mic mutes. No indicator to you that this happened. Feels like PTT is broken.
 
-4. **Hosted vs. self-hosted rendezvous** — should we run a public `voxel.damnfine.xyz` rendezvous server? That changes the product from "zero infrastructure" to "we run one thing but it's just matchmaking and we can't hear you." That might actually be the right call for a v1 product.
-
-5. **Mobile** — Tauri has iOS/Android support. The whole architecture (SQLite, WebRTC, PTT) works on mobile with adjustments. Worth exploring for v0.3.
+4. **Mobile** — Tauri has iOS/Android. Worth exploring for v0.3.
 
 ---
 
@@ -171,24 +199,34 @@ These block calling it "works":
 
 | Bug | Severity | Notes |
 |---|---|---|
-| Sounds may not play if AudioContext suspended | Medium | Browser autoplay policy. Need to call resume() at the moment of first sound. |
-| Gossip sync with peer channels may lag on first join | Low | The peer list comes from signaling, channel info from gossip. Brief mismatch. |
-| Group info modal shows peer/channel count as 0 in recent groups list | Low | Counts only meaningful when connected. Fine for saved-groups context. |
-| Settings output device dropdown present but not wired | Low | WebRTC output routing is browser-controlled, not easily scriptable. |
+| Sounds may not play if AudioContext suspended | Medium | Need `resume()` at moment of first sound playback |
+| Settings output device dropdown not wired | Low | WebRTC output routing is browser-controlled |
+| Group info modal shows peer/channel count as 0 in saved groups list | Low | Counts only meaningful when connected — fine for context |
+| xattr quarantine blocks install on first open | Medium | `xattr -cr Voxel.app` fixes it. Needs README note. |
+| ~~voxel-signal bare bg process~~ | ~~High~~ | Fixed — systemd on voxel.damnfine.xyz, auto-restarts |
 
 ---
 
 ## Versioning Plan
 
 ```
-v0.1.0-alpha.1   ← current (architecture built, not yet end-to-end validated)
-v0.1.0-alpha.N   ← incremental fixes as testing surfaces issues
+v0.1.0-alpha.1   ← current — architecture complete, rendezvous deployed, not yet voice-validated
+v0.1.0-alpha.N   ← incremental fixes as testing surfaces issues  
 v0.1.0-beta.1    ← when voice works between two people reliably
 v0.1.0           ← stable, battle-tested on real conditions
 v0.1.x           ← patch releases
-v0.2.0           ← sidecar address sharing + hosted rendezvous + key rotation
-v1.0.0           ← production-grade, full E2EE verification, multiple platforms tested
+v0.2.0           ← sidecar address sharing + wss:// + key rotation
+v1.0.0           ← production-grade, multiple platforms, full E2EE verified
 ```
+
+---
+
+## Immediate Next Action
+
+1. Set up `voxel.damnfine.xyz` Virtualmin account + Apache WebSocket proxy
+2. Test voice between Mark + Stina with the hosted rendezvous
+3. If it works → tag `v0.1.0-beta.1`
+4. Set up systemd for voxel-signal so dfn01 stays up
 
 ---
 
@@ -198,7 +236,7 @@ v1.0.0           ← production-grade, full E2EE verification, multiple platform
 src/App.tsx                    orchestration — audio lifecycle, connect flow, channel management
 src/audio/e2ee.ts              E2EE: HKDF key derivation + RTCRtpScriptTransform worker
 src/audio/mesh.ts              WebRTC mesh: up to 14 peers, speaking detection, device switch
-src/audio/ptt.ts               PTT: key format conversion, global shortcut, duck/unduck
+src/audio/ptt.ts               PTT: eventToTauriKey() for combos, Backquote default, duck/unduck
 src/audio/vad.ts               Voice activation: RMS threshold + silence hold
 src/components/GroupConnect.tsx connect screen: create/join/recent groups
 src/components/GroupInfoModal.tsx group info: key display, rename, delete confirm
@@ -206,7 +244,7 @@ src/components/ChannelTree.tsx  channel tree with icons, user rows, context menu
 src/components/ChannelModal.tsx channel create/edit: name, password, AFK, queued, max-users
 src/components/icons.tsx        ALL icons — inline SVGs, no external library (see ADR-007)
 src/runtime/sidecar.ts         sidecar probe + auto-spawn
-src/runtime/config.ts          DEFAULT_SIGNAL_URL, deriveServerName
+src/runtime/config.ts          DEFAULT_SIGNAL_URL ← change this when voxel.damnfine.xyz is ready
 src/runtime/bridge.ts          breaks App↔Settings circular import
 src/store/keyring.ts           room key AES-GCM encryption at rest
 src/store/crypto.ts            channel password SHA-256 hashing
@@ -229,6 +267,8 @@ scripts/release.sh             build automation
 
 ## The One Thing That Matters Right Now
 
-Get two people talking.
+Get Mark and Stina's voices through to each other.
 
-Everything else — E2EE, key-at-rest, sidecar, group info, admin roles, ADRs — none of it matters until voice actually flows between two machines. That's the definition of v0.1.0. Everything above is in service of that moment.
+`voxel.damnfine.xyz` → Apache proxy → `voxel-signal:8080` → two clients find each other → WebRTC connects → audio flows.
+
+That's v0.1.0-beta.1.
