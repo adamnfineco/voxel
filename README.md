@@ -24,7 +24,7 @@ Voice-only. No accounts, no tracking, no central server. Every client is a node 
 2. Enter your name
 3. **Create a Group** (generates a key) or **Join a Group** (enter a key)
 4. Click a channel to join it
-5. Hold **Space** to talk (PTT) — or switch to voice activation in Settings
+5. Hold **`` ` ``** (backtick) to talk (PTT) — or switch to voice activation in Settings
 
 First person to create a group becomes the owner. Owners can create channels, set passwords, promote admins, and kick people.
 
@@ -60,7 +60,13 @@ First person to create a group becomes the owner. Owners can create channels, se
 
 macOS (Apple Silicon) — [v0.1.0 releases page](https://github.com/adamnfineco/voxel/releases)
 
-The `.app` is self-contained. Since it's unsigned, first launch: right-click → Open.
+The `.app` is self-contained. Since it's unsigned, macOS may quarantine it on first download. If it won't open:
+
+```bash
+xattr -cr Voxel.app
+```
+
+Then double-click normally. Alternatively: right-click → Open → Open.
 
 ---
 

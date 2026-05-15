@@ -142,9 +142,12 @@ function playMessage(): void {
 export function playSound(event: SoundEvent): void {
   if (!_enabled || !_ctx) return;
 
-  // Resume AudioContext if suspended (required by browser autoplay policy)
+  // Resume AudioContext if suspended (browser autoplay policy).
+  // Await the resume before scheduling oscillators — starting nodes
+  // on a suspended context is a no-op in some WebView versions.
   if (_ctx.state === "suspended") {
-    _ctx.resume().catch(() => {});
+    _ctx.resume().then(() => playSound(event)).catch(() => {});
+    return;
   }
 
   switch (event) {
