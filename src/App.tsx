@@ -60,7 +60,7 @@ import {
   onSpeaking,
   switchInputDevice,
 } from "./audio/mesh";
-import { registerPTT, unregisterPTT, onPttChange } from "./audio/ptt";
+import { registerPTT, unregisterPTT, onPttChange, getCurrentKey } from "./audio/ptt";
 import { startVAD, stopVAD, onVadActivity } from "./audio/vad";
 import { initSounds, playSound, speak, speakChannelJoin } from "./audio/sounds";
 import { startMicMonitor, stopMicMonitor, onMicLevel } from "./audio/micLevel";
@@ -225,7 +225,7 @@ const App: Component = () => {
 
       // 7. Transmit mode
       if (pttMode()) {
-        await registerPTT("Backquote"); // ` key — no typing conflicts
+        await registerPTT(getCurrentKey()); // use whatever key the user configured
         setMicMuted(true);
         setAudioMicMuted(true);
       } else {
