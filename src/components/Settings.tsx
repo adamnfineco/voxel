@@ -14,7 +14,7 @@ import {
 import {
   registerPTT,
   getCurrentKey,
-  codeToTauriKey,
+  eventToTauriKey,
   keyDisplayLabel,
 } from "../audio/ptt";
 import { listAudioDevices, type AudioDevice } from "../audio/mesh";
@@ -91,7 +91,12 @@ const Settings: Component<Props> = (props) => {
       e.preventDefault();
       e.stopPropagation();
 
-      const tauriKey = codeToTauriKey(e.code);
+      // Convert full event (including modifiers) to Tauri key string
+      const tauriKey = eventToTauriKey(e);
+
+      // Ignore pure modifier presses — wait for an actual key
+      if (!tauriKey) return;
+
       setPttKey(tauriKey);
       setListeningForKey(false);
       document.removeEventListener("keydown", handler, true);
@@ -99,7 +104,7 @@ const Settings: Component<Props> = (props) => {
       try {
         await registerPTT(tauriKey);
       } catch {
-        setPttError(`Could not register "${tauriKey}" — try a different key.`);
+        setPttError(`Could not register "${keyDisplayLabel(tauriKey)}" — try a different key.`);
       }
     };
 

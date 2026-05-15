@@ -225,7 +225,7 @@ const App: Component = () => {
 
       // 7. Transmit mode
       if (pttMode()) {
-        await registerPTT("Space");
+        await registerPTT("Backquote"); // ` key — no typing conflicts
         setMicMuted(true);
         setAudioMicMuted(true);
       } else {
