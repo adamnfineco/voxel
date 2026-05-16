@@ -107,6 +107,7 @@ export async function createChannel(
   serverId: string,
   name: string,
   opts: {
+    id?: string;
     parentId?: string;
     isAfk?: boolean;
     afkTimeoutSeconds?: number;
@@ -115,7 +116,7 @@ export async function createChannel(
     createdBy?: string;
   } = {}
 ): Promise<Channel> {
-  const id = crypto.randomUUID();
+  const id = opts.id ?? crypto.randomUUID();
   const now = Date.now();
   await execute(
     `INSERT INTO channels 
