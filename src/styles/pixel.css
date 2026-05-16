@@ -51,11 +51,11 @@
   --c-selected:     #0d2040;
   --c-active-bg:    #00c8f0;
 
-  /* ── Sizing grid ── */
-  --fs-xs:  13px;
-  --fs-sm:  15px;
-  --fs:     17px;
-  --fs-lg:  20px;
+  /* ── Sizing grid — calmer, consistent baseline ── */
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs:     14px;
+  --fs-lg:  16px;
 
   /* ── Pixel art shadows — tinted, never pure black ── */
   --shadow-px:      2px 2px 0 var(--c-border-lo);
@@ -346,7 +346,7 @@ input[type="checkbox"]:checked::after {
 
 .app-header-logo {
   font-family: "Press Start 2P", monospace;
-  font-size: 14px;
+  font-size: 12px;
   color: var(--c-accent);
   letter-spacing: 3px;
   /* No outer glow — inner shadow only */
@@ -355,7 +355,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .app-header-meta {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--c-text-dim);
   display: flex;
   align-items: center;
@@ -690,7 +690,7 @@ input[type="checkbox"]:checked::after {
 
 .connect-logo {
   font-family: "Press Start 2P", monospace;
-  font-size: 26px;
+  font-size: 28px;
   color: var(--c-accent);
   letter-spacing: 6px;
   line-height: 1.4;
@@ -700,7 +700,7 @@ input[type="checkbox"]:checked::after {
 }
 
 .connect-tagline {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--c-text-dim);
   letter-spacing: 3px;
   margin-top: 10px;
