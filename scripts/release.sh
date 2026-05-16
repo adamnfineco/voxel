@@ -119,7 +119,8 @@ echo "   OK DMG: $DMG_PATH ($(du -h "$DMG_PATH" | cut -f1))"
 # ── Install locally ───────────────────────────────────────────────────────────
 
 echo "── Installing locally..."
-pkill -x Voxel 2>/dev/null || true
+pkill -x voxel 2>/dev/null || true
+pkill -x voxel-signal 2>/dev/null || true
 sleep 1
 rm -rf /Applications/Voxel.app
 cp -R "$APP_PATH" /Applications/Voxel.app
@@ -132,7 +133,7 @@ echo "   OK installed + opened locally"
 STINABOOK="cnocito@macbook-pro.dolly-ruler.ts.net"
 if ssh -o ConnectTimeout=5 "$STINABOOK" "echo ok" &>/dev/null; then
   echo "── Installing on Stinabook..."
-  ssh "$STINABOOK" "pkill -x Voxel 2>/dev/null; rm -rf /Applications/Voxel.app"
+  ssh "$STINABOOK" "pkill -x voxel 2>/dev/null; pkill -x voxel-signal 2>/dev/null; sleep 1; rm -rf /Applications/Voxel.app"
   scp -r "$APP_PATH" "$STINABOOK:/Applications/Voxel.app"
   ssh "$STINABOOK" "xattr -rc /Applications/Voxel.app && open /Applications/Voxel.app"
   echo "   OK installed + opened on Stinabook"
