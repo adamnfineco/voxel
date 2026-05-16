@@ -1,12 +1,14 @@
 /**
  * GroupConnect — the main entry screen.
  *
- * UX philosophy: anyone can create a group or join one.
- * No "Signal URL", no infrastructure details.
- * Just: Create a group (generates a key) or Join one (enter a key).
+ * Layout:
+ *   Your handle  [ name field ]
+ *   Groups       [ dropdown | connect btn ]
+ *                [ + Create a Group ]
+ *                [ → Join a Group   ]
  *
- * A "group" is what we used to call a "server" internally.
- * Externally it's a voice room — named, keyed, self-contained.
+ * Create: slides in below — name, key, CTA
+ * Join:   slides in below — key, name, CTA
  */
 import { Component, createSignal, For, Show } from "solid-js";
 import {
@@ -14,7 +16,6 @@ import {
   IconArrowRight,
   IconWarning,
   IconSpinner,
-  IconWifi,
   IconX,
   IconGear,
 } from "./icons";
@@ -33,20 +34,6 @@ interface Props {
   onGroupsChange: () => void;
 }
 
-/** Format a timestamp as a human-friendly relative string */
-function formatRelative(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 2)  return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)  return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7)  return `${days}d ago`;
-  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/** Generate a short human-friendly group key */
 function generateKey(): string {
   const words = [
     "echo","fox","golf","hotel","india","kilo","lima","mike",
@@ -64,6 +51,11 @@ const GroupConnect: Component<Props> = (props) => {
   const [mode, setMode] = createSignal<Mode>("home");
   const [name, setName] = createSignal(props.currentName || "");
 
+  // Selected group in dropdown (default to most recent)
+  const [selectedId, setSelectedId] = createSignal<string>(props.groups[0]?.id ?? "");
+
+  const getSelected = () => props.groups.find(g => g.id === selectedId()) ?? props.groups[0] ?? null;
+
   // Join flow
   const [joinKey, setJoinKey] = createSignal("");
   const [joinName, setJoinName] = createSignal("");
@@ -73,16 +65,16 @@ const GroupConnect: Component<Props> = (props) => {
   const [createGroupName, setCreateGroupName] = createSignal("");
   const [generatedKey] = createSignal(generateKey());
   const [keyCopied, setKeyCopied] = createSignal(false);
+  const [createError, setCreateError] = createSignal("");
+
+  // General
+  const [connecting, setConnecting] = createSignal<string | null>(null);
 
   const copyKey = async () => {
     await navigator.clipboard.writeText(generatedKey());
     setKeyCopied(true);
     setTimeout(() => setKeyCopied(false), 2000);
   };
-  const [createError, setCreateError] = createSignal("");
-
-  // General
-  const [connecting, setConnecting] = createSignal<string | null>(null);
 
   const handleNameChange = async (val: string) => {
     setName(val);
@@ -100,12 +92,10 @@ const GroupConnect: Component<Props> = (props) => {
   const handleCreate = async () => {
     const nameErr = validateName();
     if (nameErr) { setCreateError(nameErr); return; }
-
-    const key = generatedKey;
-    const groupName = createGroupName().trim() || deriveServerName(key());
+    const key = generatedKey();
+    const groupName = createGroupName().trim() || deriveServerName(key);
     setCreateError("");
-
-    const server = await addServer(groupName, key());
+    const server = await addServer(groupName, key);
     setConnecting(server.id);
     try {
       await props.onConnect(server, name().trim());
@@ -123,7 +113,6 @@ const GroupConnect: Component<Props> = (props) => {
     const k = joinKey().trim();
     if (!k) { setJoinError("Enter the group key."); return; }
     setJoinError("");
-
     const groupName = joinName().trim() || deriveServerName(k);
     const server = await addServer(groupName, k);
     setConnecting(server.id);
@@ -137,7 +126,9 @@ const GroupConnect: Component<Props> = (props) => {
     }
   };
 
-  const handleConnectExisting = async (server: Server) => {
+  const handleConnectSelected = async () => {
+    const server = getSelected();
+    if (!server) return;
     const nameErr = validateName();
     if (nameErr) { setJoinError(nameErr); return; }
     setConnecting(server.id);
@@ -153,13 +144,13 @@ const GroupConnect: Component<Props> = (props) => {
       {/* Logo */}
       <div class="connect-logo-wrap">
         <span class="connect-logo">VOXEL</span>
-        <span class="connect-tagline">voice · mesh · peer-to-peer</span>
+        <span class="connect-tagline">mesh · peer-to-peer · voice chat</span>
       </div>
 
-      {/* Your name — always visible */}
+      {/* Name */}
       <div class="connect-form">
         <div>
-          <label>Your Name</label>
+          <label>Your Handle</label>
           <input
             class="pixel-input"
             type="text"
@@ -169,7 +160,7 @@ const GroupConnect: Component<Props> = (props) => {
             onInput={(e) => handleNameChange(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && mode() === "home" && props.groups.length > 0) {
-                handleConnectExisting(props.groups[0]);
+                handleConnectSelected();
               }
             }}
             autocomplete="off"
@@ -179,13 +170,18 @@ const GroupConnect: Component<Props> = (props) => {
           />
         </div>
 
+        {/* Connect error */}
         <Show when={props.connectError}>
           <div class="col gap-1">
             <div class="connect-form-error row gap-1">
               <IconWarning size={12} />
               {props.connectError}
             </div>
-            <Show when={props.connectError?.toLowerCase().includes("not allowed") || props.connectError?.toLowerCase().includes("permission") || props.connectError?.toLowerCase().includes("denied")}>
+            <Show when={
+              props.connectError?.toLowerCase().includes("not allowed") ||
+              props.connectError?.toLowerCase().includes("permission") ||
+              props.connectError?.toLowerCase().includes("denied")
+            }>
               <button
                 class="pixel-btn"
                 style={{ "font-size": "var(--fs-xs)", "align-self": "flex-start" }}
@@ -201,47 +197,51 @@ const GroupConnect: Component<Props> = (props) => {
         </Show>
       </div>
 
-      {/* ── Home: Create or Join ── */}
+      {/* ── Home ── */}
       <Show when={mode() === "home"}>
-        {/* Recent groups */}
-        <Show when={props.groups.length > 0}>
-          <div class="server-list">
-            <div class="server-list-label row gap-1">
-              <IconWifi size={10} />
-              Recent Groups
-            </div>
-            <For each={props.groups}>
-              {(server) => (
-                <div
-                  class="server-item"
-                  onClick={() => handleConnectExisting(server)}
-                  title={`Connect to ${server.name}`}
-                >
-                  <div class="server-item-info">
-                    <span class="server-item-name">{server.name}</span>
-                    <Show when={server.last_connected}>
-                      <span class="server-item-url">
-                        last used {formatRelative(server.last_connected!)}
-                      </span>
-                    </Show>
-                  </div>
-                  <Show
-                    when={connecting() === server.id}
-                    fallback={<IconArrowRight size={13} color="var(--c-text-dim)" />}
-                  >
-                    <IconSpinner size={13} color="var(--c-accent)" />
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-
-        {/* Action buttons */}
         <div class="connect-form" style={{ gap: "8px" }}>
+
+          {/* Groups section */}
+          <div>
+            <label>Groups</label>
+            <Show
+              when={props.groups.length > 0}
+              fallback={
+                <div class="text-dim text-xs" style={{ padding: "6px 0", "line-height": "1.8" }}>
+                  No groups yet — create one below.
+                </div>
+              }
+            >
+              <div class="row gap-1">
+                <select
+                  class="pixel-input"
+                  style={{ flex: 1 }}
+                  value={selectedId()}
+                  onChange={(e) => setSelectedId(e.currentTarget.value)}
+                >
+                  <For each={props.groups}>
+                    {(g) => <option value={g.id}>{g.name}</option>}
+                  </For>
+                </select>
+                <button
+                  class="pixel-btn is-active pixel-btn-icon"
+                  onClick={handleConnectSelected}
+                  disabled={!!connecting()}
+                  title="Connect"
+                  style={{ "flex-shrink": 0 }}
+                >
+                  <Show when={connecting() === getSelected()?.id} fallback={<IconArrowRight size={13} />}>
+                    <IconSpinner size={13} />
+                  </Show>
+                </button>
+              </div>
+            </Show>
+          </div>
+
+          {/* Create + Join */}
           <button
-            class="pixel-btn is-active"
-            style={{ width: "100%", "font-size": "var(--fs)", padding: "8px 12px" }}
+            class="pixel-btn"
+            style={{ width: "100%", "font-size": "var(--fs)", padding: "7px 12px" }}
             onClick={() => setMode("create")}
           >
             <IconPlus size={13} />
@@ -249,7 +249,7 @@ const GroupConnect: Component<Props> = (props) => {
           </button>
           <button
             class="pixel-btn"
-            style={{ width: "100%", "font-size": "var(--fs)", padding: "8px 12px" }}
+            style={{ width: "100%", "font-size": "var(--fs)", padding: "7px 12px" }}
             onClick={() => setMode("join")}
           >
             <IconArrowRight size={13} />
@@ -261,9 +261,7 @@ const GroupConnect: Component<Props> = (props) => {
       {/* ── Create flow ── */}
       <Show when={mode() === "create"}>
         <div class="connect-form">
-          <div style={{ "font-size": "var(--fs-sm)", color: "var(--c-text-dim)", "text-transform": "uppercase", "letter-spacing": "1px" }}>
-            Create Group
-          </div>
+          <div class="server-list-label">Create Group</div>
 
           <div>
             <label>Group Name (optional)</label>
@@ -273,13 +271,13 @@ const GroupConnect: Component<Props> = (props) => {
               placeholder="My Team, Work Crew, etc."
               value={createGroupName()}
               onInput={(e) => setCreateGroupName(e.currentTarget.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               autocomplete="off"
             />
           </div>
 
-          {/* Show generated key + copy button */}
           <div>
-            <label>Your Group Key</label>
+            <label>Group Key</label>
             <div
               onClick={copyKey}
               title="Click to copy"
@@ -299,8 +297,8 @@ const GroupConnect: Component<Props> = (props) => {
             >
               {keyCopied() ? "copied!" : generatedKey()}
             </div>
-            <div class="setting-row-hint" style={{ "font-size": "var(--fs-sm)", "margin-top": "4px" }}>
-              Click to copy. Share this key with anyone you want to invite.
+            <div class="setting-row-hint" style={{ "margin-top": "4px" }}>
+              Click to copy — share this key to invite people.
             </div>
           </div>
 
@@ -335,9 +333,7 @@ const GroupConnect: Component<Props> = (props) => {
       {/* ── Join flow ── */}
       <Show when={mode() === "join"}>
         <div class="connect-form">
-          <div style={{ "font-size": "var(--fs-sm)", color: "var(--c-text-dim)", "text-transform": "uppercase", "letter-spacing": "1px" }}>
-            Join Group
-          </div>
+          <div class="server-list-label">Join Group</div>
 
           <div>
             <label>Group Key</label>

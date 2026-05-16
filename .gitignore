@@ -15,6 +15,9 @@ src-tauri/gen/
 *.db-shm
 *.db-wal
 
+# Secrets
+.env
+
 # OS
 .DS_Store
 .DS_Store?
