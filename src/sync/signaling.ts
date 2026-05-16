@@ -242,6 +242,10 @@ async function handleMessage(msg: SignalMessage): Promise<void> {
         muted: false,
         afk: false,
       });
+      // Re-announce our channel so the joining peer knows where we are
+      if (_channelId) {
+        send({ type: "channel_change", from: _peerId, serverId: _serverId, channelId: _channelId });
+      }
       playSound("user_join");
       speak(`${msg.displayName ?? "Someone"} joined`);
       break;
