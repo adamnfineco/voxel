@@ -96,6 +96,14 @@ import { hashPassword, verifyPassword } from "./store/crypto";
 
 const AFK_TIMEOUT_MS = 5 * 60 * 1000;
 
+function defaultLobbyId(serverId: string): string {
+  return `${serverId}-lobby`;
+}
+
+function defaultAfkId(serverId: string): string {
+  return `${serverId}-afk`;
+}
+
 const App: Component = () => {
   // Owned by App — never passed to children, only into audio modules
   let _stream: MediaStream | null = null;
@@ -302,8 +310,12 @@ const App: Component = () => {
       // 13. Load or create default channels
       let chs = await listChannels(server.id);
       if (chs.length === 0) {
-        const lobby = await createChannel(server.id, "Lobby", { createdBy: id.id });
+        const lobby = await createChannel(server.id, "Lobby", {
+          id: defaultLobbyId(server.id),
+          createdBy: id.id,
+        });
         const afkCh = await createChannel(server.id, "AFK", {
+          id: defaultAfkId(server.id),
           isAfk: true,
           afkTimeoutSeconds: 300,
           createdBy: id.id,
