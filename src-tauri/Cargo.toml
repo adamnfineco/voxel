@@ -1,6 +1,6 @@
 [package]
 name = "voxel"
-version = "0.1.0-alpha.16"
+version = "0.1.0-alpha.17"
 description = "Retro voice chat — Ventrilo-inspired mesh audio"
 authors = ["adamnfineco"]
 license = "MIT"

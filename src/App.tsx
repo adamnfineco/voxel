@@ -63,7 +63,11 @@ import {
 } from "./audio/mesh";
 import { registerPTT, unregisterPTT, onPttChange, getCurrentKey } from "./audio/ptt";
 import { startVAD, stopVAD, onVadActivity } from "./audio/vad";
-import { initSounds, playSound, speak, speakChannelJoin } from "./audio/sounds";
+import {
+  initSounds, playSound,
+  speakConnected, speakDisconnected,
+  speakYouMovedToChannel, speakJoinedChannel, speakLeftChannel,
+} from "./audio/sounds";
 import { startMicMonitor, stopMicMonitor, onMicLevel } from "./audio/micLevel";
 import {
   connect as signalConnect,
@@ -154,8 +158,24 @@ const App: Component = () => {
       // Mic level → state (drives meter UI)
       onMicLevel((level) => setMicLevel(level));
 
-      // Remote channel changes — update state and enforce audio isolation
+      // Remote channel changes — update state, enforce audio isolation, announce TTS
       onSignalChannelChange((peerId, channelId) => {
+        const peer = peers().get(peerId);
+        const prevChannelId = peer?.channelId ?? null;
+        const name = peer?.displayName ?? "Someone";
+        const chs = channels();
+
+        // Announce channel leave if they were in a channel
+        if (prevChannelId && prevChannelId !== channelId) {
+          const prevCh = chs.find(c => c.id === prevChannelId);
+          if (prevCh) speakLeftChannel(name, prevCh.name);
+        }
+        // Announce channel join if they moved to a channel
+        if (channelId && channelId !== prevChannelId) {
+          const newCh = chs.find(c => c.id === channelId);
+          if (newCh) speakJoinedChannel(name, newCh.name);
+        }
+
         updatePeer(peerId, { channelId });
         enforceChannelAudio(peerId, channelId);
       });
@@ -355,7 +375,7 @@ const App: Component = () => {
       }
 
       playSound("connect");
-      speak(`Connected to ${server.name}`);
+      speakConnected();
       resetAfkTimer();
 
     } catch (e) {
@@ -391,18 +411,19 @@ const App: Component = () => {
     setView("connect");
     setConnectError("");
 
-    playSound("disconnect");
+      playSound("disconnect");
+      speakDisconnected();
   };
 
   // ─── Channels ─────────────────────────────────────────────────────────────
 
-  const doJoinChannel = async (channel: Channel) => {
+  const doJoinChannel = async (channel: Channel, movedByAdmin = false) => {
     const id = identity();
     if (!id || !activeServer()) return;
     setActiveChannel(channel);
     announceChannelJoin(channel.id);
     updatePeer(id.id, { channelId: channel.id, displayName: displayName() });
-    speakChannelJoin(channel.name);
+    if (movedByAdmin) speakYouMovedToChannel(channel.name);
     playSound("channel_join");
     resetAfkTimer();
     // Enforce audio isolation — mute peers not in this channel
@@ -568,7 +589,7 @@ const App: Component = () => {
     _afkTimer = setTimeout(async () => {
       if (activeChannel()?.is_afk) return;
       updatePeer(me.id, { afk: true });
-      await handleJoinChannel(afkCh);
+      await doJoinChannel(afkCh, true);
       setMicMuted(true);
       setAudioMicMuted(true);
     }, AFK_TIMEOUT_MS);

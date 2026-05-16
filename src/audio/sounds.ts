@@ -211,10 +211,30 @@ export function speak(text: string): void {
   window.speechSynthesis.speak(utt);
 }
 
-export function speakLeave(displayName: string): void {
-  speak(`${displayName} left`);
+export function speakJoinedGroup(displayName: string): void {
+  speak(`${displayName} has joined the group`);
 }
 
-export function speakChannelJoin(channelName: string): void {
-  speak(`Entering ${channelName}`);
+export function speakLeftGroup(displayName: string): void {
+  speak(`${displayName} has left the group`);
+}
+
+export function speakJoinedChannel(displayName: string, channelName: string): void {
+  speak(`${displayName} has joined channel ${channelName}`);
+}
+
+export function speakLeftChannel(displayName: string, channelName: string): void {
+  speak(`${displayName} has left channel ${channelName}`);
+}
+
+export function speakYouMovedToChannel(channelName: string): void {
+  speak(`You have been moved to channel ${channelName}`);
+}
+
+export function speakConnected(): void {
+  speak("Connection established");
+}
+
+export function speakDisconnected(): void {
+  speak("Connection lost");
 }
