@@ -15,7 +15,7 @@ import {
   onAnswer,
 } from "../audio/mesh";
 import { updatePeer, removePeer as removeStatePeer } from "../store/appState";
-import { playSound, speak, speakLeave } from "../audio/sounds";
+import { playSound, speakJoinedGroup, speakLeftGroup } from "../audio/sounds";
 
 export interface SignalMessage {
   type: string;
@@ -255,7 +255,7 @@ async function handleMessage(msg: SignalMessage): Promise<void> {
         send({ type: "channel_change", from: _peerId, serverId: _serverId, channelId: _channelId });
       }
       playSound("user_join");
-      speak(`${msg.displayName ?? "Someone"} joined`);
+      speakJoinedGroup(msg.displayName ?? "Someone");
       break;
     }
 
@@ -264,7 +264,7 @@ async function handleMessage(msg: SignalMessage): Promise<void> {
       removePeer(msg.from);
       removeStatePeer(msg.from);
       playSound("user_leave");
-      speakLeave(msg.displayName ?? "Someone");
+      speakLeftGroup(msg.displayName ?? "Someone");
       break;
     }
 
