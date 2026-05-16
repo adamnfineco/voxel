@@ -116,6 +116,30 @@ DMG_PATH="$STAGING/Voxel_${VERSION}_aarch64.dmg"
 hdiutil create -volname "Voxel" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1
 echo "   OK DMG: $DMG_PATH ($(du -h "$DMG_PATH" | cut -f1))"
 
+# ── Install locally ───────────────────────────────────────────────────────────
+
+echo "── Installing locally..."
+pkill -x Voxel 2>/dev/null || true
+sleep 1
+rm -rf /Applications/Voxel.app
+cp -R "$APP_PATH" /Applications/Voxel.app
+xattr -rc /Applications/Voxel.app
+open /Applications/Voxel.app
+echo "   OK installed + opened locally"
+
+# ── Install on Stinabook ──────────────────────────────────────────────────────
+
+STINABOOK="cnocito@macbook-pro.dolly-ruler.ts.net"
+if ssh -o ConnectTimeout=5 "$STINABOOK" "echo ok" &>/dev/null; then
+  echo "── Installing on Stinabook..."
+  ssh "$STINABOOK" "pkill -x Voxel 2>/dev/null; rm -rf /Applications/Voxel.app"
+  scp -r "$APP_PATH" "$STINABOOK:/Applications/Voxel.app"
+  ssh "$STINABOOK" "xattr -rc /Applications/Voxel.app && open /Applications/Voxel.app"
+  echo "   OK installed + opened on Stinabook"
+else
+  echo "   SKIP Stinabook — not reachable"
+fi
+
 # ── Step 6: Git tag ───────────────────────────────────────────────────────────
 
 echo ""
