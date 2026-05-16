@@ -1,6 +1,9 @@
 import { defineConfig, type Plugin } from "vite";
 import solid from "vite-plugin-solid";
 import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
+
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 /**
  * solidBrowserFix
@@ -57,6 +60,9 @@ function solidBrowserFix(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     solidBrowserFix(),
     solid(),

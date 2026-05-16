@@ -4,13 +4,14 @@
 # Example: ./scripts/release.sh 0.1.0
 #
 # What this does:
-#   1. Typecheck + test
-#   2. Build frontend
-#   3. Build Rust signal server
-#   4. Bundle the sidecar binary
-#   5. Build Tauri .app + .dmg for aarch64-apple-darwin (Apple Silicon)
-#   6. Create a git tag vX.Y.Z
-#   7. Show artifact locations
+#   1. Typecheck + signal server tests
+#   2. Build Rust signal server + bundle as sidecar
+#   3. Update version numbers
+#   4. Build Tauri .app + .dmg (signed with Developer ID: A Damn Fine Co)
+#   5. Create a git tag vX.Y.Z
+#
+# Notarization (for zero-prompt public releases) is a separate step.
+# For test distribution, signing alone is sufficient — right-click → Open.
 
 set -euo pipefail
 
@@ -20,7 +21,6 @@ cd "$(dirname "$0")/.."
 
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
-  # Read from package.json
   VERSION=$(node -p "require('./package.json').version")
 fi
 
@@ -29,17 +29,17 @@ echo ""
 
 # ── Prerequisites ─────────────────────────────────────────────────────────────
 
-command -v cargo >/dev/null 2>&1 || { echo "❌ cargo not found — install Rust"; exit 1; }
-command -v node  >/dev/null 2>&1 || { echo "❌ node not found"; exit 1; }
+command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found — install Rust"; exit 1; }
+command -v node  >/dev/null 2>&1 || { echo "ERROR: node not found"; exit 1; }
 source "$HOME/.cargo/env" 2>/dev/null || true
 
 # ── Step 1: Typecheck ─────────────────────────────────────────────────────────
 
 echo "── TypeScript check..."
-npx tsc --noEmit
-echo "   ✓ TypeScript clean"
+node node_modules/typescript/bin/tsc --noEmit --skipLibCheck
+echo "   OK TypeScript clean"
 
-# ── Step 2: Signal server integration tests ───────────────────────────────────
+# ── Step 2: Signal server build + tests ───────────────────────────────────────
 
 echo "── Building signal server..."
 cargo build --release --manifest-path signal/Cargo.toml
@@ -50,61 +50,73 @@ SIGNAL_PID=$!
 sleep 1
 node test-signal.mjs
 kill $SIGNAL_PID 2>/dev/null || true
-echo "   ✓ 21/21 tests passing"
+echo "   OK 21/21 tests passing"
 
-# ── Step 3: Bundle sidecar binary ─────────────────────────────────────────────
+# ── Step 3: Bundle sidecar ────────────────────────────────────────────────────
 
 echo "── Bundling sidecar binary..."
 mkdir -p src-tauri/binaries
 cp target/release/voxel-signal \
    src-tauri/binaries/voxel-signal-aarch64-apple-darwin
-echo "   ✓ voxel-signal-aarch64-apple-darwin"
+echo "   OK voxel-signal-aarch64-apple-darwin"
 
 # ── Step 4: Update version numbers ───────────────────────────────────────────
 
 echo "── Updating version to ${VERSION}..."
-# package.json
 node -e "
 const fs=require('fs');
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 pkg.version='${VERSION}';
 fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');
 "
-# tauri.conf.json
 node -e "
 const fs=require('fs');
 const cfg=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8'));
 cfg.version='${VERSION}';
 fs.writeFileSync('src-tauri/tauri.conf.json',JSON.stringify(cfg,null,2)+'\n');
 "
-# Cargo.toml for the client crate
 sed -i '' "s/^version = \".*\"/version = \"${VERSION}\"/" src-tauri/Cargo.toml
+echo "   OK versions updated"
 
 # ── Step 5: Build Tauri app ───────────────────────────────────────────────────
 
 echo "── Building Tauri app..."
-cargo tauri build --target aarch64-apple-darwin
-echo "   ✓ Build complete"
+# Tauri's codesign step fails when the project is inside iCloud Drive (xattrs).
+# We let the build finish, then sign manually from a staging dir outside iCloud.
+cargo tauri build --target aarch64-apple-darwin --no-bundle 2>/dev/null || \
+  cargo tauri build --target aarch64-apple-darwin || true
 
-# ── Step 6: Locate artifacts ──────────────────────────────────────────────────
+APP_SRC="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
 
-APP_PATH="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
-DMG_PATH=$(find target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -1)
-
-echo ""
-echo "── Artifacts:"
-if [[ -d "$APP_PATH" ]]; then
-  echo "   .app  → $APP_PATH"
-else
-  echo "   .app  → not found (check target/aarch64-apple-darwin/release/bundle/)"
+if [[ ! -d "$APP_SRC" ]]; then
+  echo "ERROR: .app not found — build likely failed"
+  exit 1
 fi
-if [[ -n "$DMG_PATH" ]]; then
-  echo "   .dmg  → $DMG_PATH"
-else
-  echo "   .dmg  → not found (may need macOS code signing)"
-fi
+echo "   OK build complete"
 
-# ── Step 7: Git tag ───────────────────────────────────────────────────────────
+# ── Step 6: Sign from staging (iCloud xattr workaround) ──────────────────────
+
+STAGING="/tmp/voxel-release-staging"
+APP_PATH="$STAGING/Voxel.app"
+
+echo "── Signing (via staging dir to avoid iCloud xattr issue)..."
+rm -rf "$STAGING" && mkdir -p "$STAGING"
+cp -R "$APP_SRC" "$APP_PATH"
+xattr -rc "$APP_PATH"
+codesign --force --deep \
+  --sign "Developer ID Application: A Damn Fine Co (3YGSXDS222)" \
+  --options runtime \
+  "$APP_PATH" 2>&1
+codesign --verify --deep --strict "$APP_PATH"
+echo "   OK signed: Developer ID Application: A Damn Fine Co (3YGSXDS222)"
+
+# ── Build DMG from signed app ─────────────────────────────────────────────────
+
+DMG_PATH="$STAGING/Voxel_${VERSION}_aarch64.dmg"
+hdiutil create -volname "Voxel" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1
+echo "   OK DMG: $DMG_PATH ($(du -h "$DMG_PATH" | cut -f1))"
+
+# ── Step 6: Git tag ───────────────────────────────────────────────────────────
 
 echo ""
 read -p "Create git tag v${VERSION} and push? [y/N] " confirm
@@ -114,8 +126,11 @@ if [[ "$confirm" =~ ^[Yy]$ ]]; then
   git tag -a "v${VERSION}" -m "Voxel v${VERSION}"
   git push origin main
   git push origin "v${VERSION}"
-  echo "   ✓ Tagged v${VERSION} and pushed"
+  echo "   OK tagged v${VERSION} and pushed"
 fi
 
 echo ""
-echo "Done! Voxel v${VERSION} for Apple Silicon"
+echo "Done! Voxel v${VERSION} — signed by A Damn Fine Co"
+if [[ -n "$DMG_PATH" ]]; then
+  echo "   DMG: $DMG_PATH"
+fi

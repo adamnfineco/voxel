@@ -168,6 +168,11 @@ const GroupConnect: Component<Props> = (props) => {
             value={name()}
             maxLength={24}
             onInput={(e) => handleNameChange(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && mode() === "home" && props.groups.length > 0) {
+                handleConnectExisting(props.groups[0]);
+              }
+            }}
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
