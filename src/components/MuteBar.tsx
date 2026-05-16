@@ -49,9 +49,9 @@ const MuteBar: Component<Props> = (props) => {
       >
         <Show
           when={!micMuted()}
-          fallback={<IconMicOff size={14} />}
+          fallback={<IconMicOff size={16} />}
         >
-          <IconMic size={14} />
+          <IconMic size={16} />
         </Show>
       </button>
 
@@ -63,9 +63,9 @@ const MuteBar: Component<Props> = (props) => {
       >
         <Show
           when={!soundMuted()}
-          fallback={<IconSpeakerOff size={14} />}
+          fallback={<IconSpeakerOff size={16} />}
         >
-          <IconSpeaker size={14} />
+          <IconSpeaker size={16} />
         </Show>
       </button>
 
@@ -73,7 +73,7 @@ const MuteBar: Component<Props> = (props) => {
       <Show when={connected()}>
         <div class={`ptt-pill${isTalking() ? " is-active" : ""}`}>
           <div class="ptt-dot" />
-          <IconBroadcast size={10} />
+          <IconBroadcast size={12} />
           {pttMode() ? "PTT" : "VAD"}
         </div>
       </Show>
@@ -92,14 +92,14 @@ const MuteBar: Component<Props> = (props) => {
           onClick={props.onOpenGroupInfo}
           title="Group Info"
         >
-          <IconInfo size={14} />
+          <IconInfo size={16} />
         </button>
         <button
           class="pixel-btn pixel-btn-icon danger"
           onClick={props.onDisconnect}
           title="Disconnect"
         >
-          <IconX size={14} />
+          <IconX size={16} />
         </button>
       </Show>
     </div>
