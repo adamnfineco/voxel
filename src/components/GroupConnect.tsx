@@ -217,47 +217,46 @@ const GroupConnect: Component<Props> = (props) => {
           {/* Groups section */}
           <div>
             <label>Groups</label>
-            <Show
-              when={props.groups.length > 0}
-              fallback={
-              <div class="text-dim text-xs" style={{ padding: "6px 0", "line-height": "1.8" }}>
-                  No groups yet — create one below.
-                </div>
-              }
-            >
-              <div class="row gap-1">
-                <select
-                  class="pixel-input"
-                  style={{ flex: 1 }}
-                  value={selectedId()}
-                  onChange={(e) => {
-                    const next = e.currentTarget.value;
-                    if (next === CREATE_SENTINEL) {
-                      setMode("create");
-                      return;
-                    }
-                    setSelectedId(next);
-                  }}
-                >
-                  <For each={props.groups}>
-                    {(g) => <option value={g.id}>{g.name}</option>}
-                  </For>
+            <div class="row gap-1">
+              <select
+                class="pixel-input"
+                style={{ flex: 1 }}
+                value={props.groups.length > 0 ? selectedId() : CREATE_SENTINEL}
+                onChange={(e) => {
+                  const next = e.currentTarget.value;
+                  if (next === CREATE_SENTINEL) {
+                    setMode("create");
+                    return;
+                  }
+                  setSelectedId(next);
+                }}
+              >
+                <For each={props.groups}>
+                  {(g) => <option value={g.id}>{g.name}</option>}
+                </For>
+                <Show when={props.groups.length > 0}>
                   <option value={CREATE_SENTINEL}>──────────</option>
-                  <option value={CREATE_SENTINEL}>Create New Group</option>
-                </select>
-                <button
-                  class="pixel-btn is-active pixel-btn-icon"
-                  onClick={handleConnectSelected}
-                  disabled={!!connecting()}
-                  title="Connect"
-                  style={{ "flex-shrink": 0 }}
-                >
-                  <Show when={connecting() === getSelected()?.id} fallback={<IconArrowRight size={13} />}>
-                    <IconSpinner size={13} />
-                  </Show>
-                </button>
-              </div>
-            </Show>
+                </Show>
+                <option value={CREATE_SENTINEL}>Create New Group</option>
+              </select>
+              <button
+                class="pixel-btn is-active pixel-btn-icon"
+                onClick={() => {
+                  if (props.groups.length === 0 || selectedId() === CREATE_SENTINEL) {
+                    setMode("create");
+                    return;
+                  }
+                  handleConnectSelected();
+                }}
+                disabled={!!connecting()}
+                title={props.groups.length === 0 ? "Create New Group" : "Connect"}
+                style={{ "flex-shrink": 0 }}
+              >
+                <Show when={connecting() === getSelected()?.id} fallback={<IconArrowRight size={13} />}>
+                  <IconSpinner size={13} />
+                </Show>
+              </button>
+            </div>
           </div>
           <button
             class="pixel-btn"
