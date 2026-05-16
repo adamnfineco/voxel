@@ -267,6 +267,12 @@ select.pixel-input {
   padding-right: 22px;
 }
 
+.connect-screen select.pixel-input {
+  height: 30px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 /* Range slider — pixel art styled */
 input[type="range"] {
   -webkit-appearance: none;
