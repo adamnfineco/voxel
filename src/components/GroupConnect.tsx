@@ -10,7 +10,7 @@
  * Create: slides in below — name, key, CTA
  * Join:   slides in below — key, name, CTA
  */
-import { Component, createSignal, For, Show } from "solid-js";
+import { Component, createEffect, createSignal, For, Show } from "solid-js";
 import {
   IconPlus,
   IconArrowRight,
@@ -48,11 +48,24 @@ function generateKey(): string {
 
 const GroupConnect: Component<Props> = (props) => {
   type Mode = "home" | "create" | "join";
+  const CREATE_SENTINEL = "__create_new_group__";
   const [mode, setMode] = createSignal<Mode>("home");
   const [name, setName] = createSignal(props.currentName || "");
 
   // Selected group in dropdown (default to most recent)
   const [selectedId, setSelectedId] = createSignal<string>(props.groups[0]?.id ?? "");
+
+  createEffect(() => {
+    const groups = props.groups;
+    if (groups.length === 0) {
+      setSelectedId("");
+      return;
+    }
+    const current = selectedId();
+    if (!current || (!groups.some(g => g.id === current) && current !== CREATE_SENTINEL)) {
+      setSelectedId(groups[0].id);
+    }
+  });
 
   const getSelected = () => props.groups.find(g => g.id === selectedId()) ?? props.groups[0] ?? null;
 
@@ -207,7 +220,7 @@ const GroupConnect: Component<Props> = (props) => {
             <Show
               when={props.groups.length > 0}
               fallback={
-                <div class="text-dim text-xs" style={{ padding: "6px 0", "line-height": "1.8" }}>
+              <div class="text-dim text-xs" style={{ padding: "6px 0", "line-height": "1.8" }}>
                   No groups yet — create one below.
                 </div>
               }
@@ -217,11 +230,20 @@ const GroupConnect: Component<Props> = (props) => {
                   class="pixel-input"
                   style={{ flex: 1 }}
                   value={selectedId()}
-                  onChange={(e) => setSelectedId(e.currentTarget.value)}
+                  onChange={(e) => {
+                    const next = e.currentTarget.value;
+                    if (next === CREATE_SENTINEL) {
+                      setMode("create");
+                      return;
+                    }
+                    setSelectedId(next);
+                  }}
                 >
                   <For each={props.groups}>
                     {(g) => <option value={g.id}>{g.name}</option>}
                   </For>
+                  <option value={CREATE_SENTINEL}>──────────</option>
+                  <option value={CREATE_SENTINEL}>Create new…</option>
                 </select>
                 <button
                   class="pixel-btn is-active pixel-btn-icon"
@@ -241,7 +263,7 @@ const GroupConnect: Component<Props> = (props) => {
           {/* Create + Join */}
           <button
             class="pixel-btn"
-            style={{ width: "100%", "font-size": "var(--fs)", padding: "7px 12px" }}
+            style={{ width: "100%", "font-size": "var(--fs-sm)", padding: "6px 10px" }}
             onClick={() => setMode("create")}
           >
             <IconPlus size={13} />
@@ -249,7 +271,7 @@ const GroupConnect: Component<Props> = (props) => {
           </button>
           <button
             class="pixel-btn"
-            style={{ width: "100%", "font-size": "var(--fs)", padding: "7px 12px" }}
+            style={{ width: "100%", "font-size": "var(--fs-sm)", padding: "6px 10px" }}
             onClick={() => setMode("join")}
           >
             <IconArrowRight size={13} />
