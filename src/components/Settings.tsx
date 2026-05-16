@@ -27,6 +27,7 @@ import {
 import { setDuckingEnabled } from "../audio/ducking";
 import { setThreshold, setSilenceHold } from "../audio/vad";
 import { getSwitchInputHandler } from "../runtime/bridge";
+import { Command } from "@tauri-apps/plugin-shell";
 import { getAppPref, setAppPref } from "../store/db";
 import { DEFAULT_SIGNAL_URL } from "../runtime/config";
 import { SIGNAL_URL_PREF_KEY } from "../runtime/sidecar";
@@ -195,15 +196,23 @@ const Settings: Component<Props> = (props) => {
                 </Show>
               </label>
               <Show
-                when={inputDevices().length > 0}
+                when={inputDevices().length > 0 && inputDevices().some(d => d.label.length > 0)}
                 fallback={
-                  <div class="text-dim text-xs" style={{ "line-height": "1.8" }}>
-                    <Show
-                      when={connected()}
-                      fallback={"Connect to a group first — mic permission is requested on join."}
+                  <div class="col gap-1">
+                    <div class="text-dim text-xs" style={{ "line-height": "1.8" }}>
+                      Voxel doesn't have microphone access yet.
+                    </div>
+                    <button
+                      class="pixel-btn"
+                      style={{ "font-size": "var(--fs-xs)", "align-self": "flex-start" }}
+                      onClick={() =>
+                        Command.create("open", [
+                          "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+                        ]).execute().catch(() => {})
+                      }
                     >
-                      No microphone found. Check System Settings → Privacy → Microphone.
-                    </Show>
+                      Open Mic Settings
+                    </button>
                   </div>
                 }
               >
@@ -413,7 +422,7 @@ const Settings: Component<Props> = (props) => {
             <div class="setting-group-label">Voxel</div>
             <div class="setting-row">
               <label>Version</label>
-              <span class="text-mid">0.1.0</span>
+              <span class="text-mid">{__APP_VERSION__}</span>
             </div>
             <div class="setting-row">
               <label>License</label>
