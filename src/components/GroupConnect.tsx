@@ -18,7 +18,7 @@ import {
   IconX,
   IconGear,
 } from "./icons";
-import { Command } from "@tauri-apps/plugin-shell";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import type { Server } from "../store/servers";
 import { addServer } from "../store/servers";
 import { setDisplayName as saveDisplayName } from "../store/identity";
@@ -193,9 +193,7 @@ const GroupConnect: Component<Props> = (props) => {
                 class="pixel-btn"
                 style={{ "font-size": "var(--fs-xs)", "align-self": "flex-start" }}
                 onClick={() =>
-                  Command.create("open", [
-                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-                  ]).execute().catch(() => {})
+                  shellOpen("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone").catch(() => {})
                 }
               >
                 <IconGear size={11} />

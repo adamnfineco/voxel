@@ -27,7 +27,7 @@ import {
 import { setDuckingEnabled } from "../audio/ducking";
 import { setThreshold, setSilenceHold } from "../audio/vad";
 import { getSwitchInputHandler } from "../runtime/bridge";
-import { Command } from "@tauri-apps/plugin-shell";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import { getAppPref, setAppPref } from "../store/db";
 import { DEFAULT_SIGNAL_URL } from "../runtime/config";
 import { SIGNAL_URL_PREF_KEY } from "../runtime/sidecar";
@@ -206,9 +206,7 @@ const Settings: Component<Props> = (props) => {
                       class="pixel-btn"
                       style={{ "font-size": "var(--fs-xs)", "align-self": "flex-start" }}
                       onClick={() =>
-                        Command.create("open", [
-                          "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-                        ]).execute().catch(() => {})
+                        shellOpen("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone").catch(() => {})
                       }
                     >
                       Open Mic Settings
