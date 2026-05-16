@@ -243,7 +243,7 @@ const GroupConnect: Component<Props> = (props) => {
                     {(g) => <option value={g.id}>{g.name}</option>}
                   </For>
                   <option value={CREATE_SENTINEL}>──────────</option>
-                  <option value={CREATE_SENTINEL}>Create new…</option>
+                  <option value={CREATE_SENTINEL}>Create New Group</option>
                 </select>
                 <button
                   class="pixel-btn is-active pixel-btn-icon"
@@ -259,16 +259,6 @@ const GroupConnect: Component<Props> = (props) => {
               </div>
             </Show>
           </div>
-
-          {/* Create + Join */}
-          <button
-            class="pixel-btn"
-            style={{ width: "100%", "font-size": "var(--fs-sm)", padding: "6px 10px" }}
-            onClick={() => setMode("create")}
-          >
-            <IconPlus size={13} />
-            Create a Group
-          </button>
           <button
             class="pixel-btn"
             style={{ width: "100%", "font-size": "var(--fs-sm)", padding: "6px 10px" }}

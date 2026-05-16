@@ -37,7 +37,7 @@ import {
   view, setView,
   setMyRole,
   queuedSpeaker, setQueuedSpeaker,
-  connStatus, setConnStatus,
+  setConnStatus,
 } from "./store/appState";
 import { getOrCreateIdentity } from "./store/identity";
 import {
@@ -638,23 +638,8 @@ const App: Component = () => {
         <div class="app-header">
           <span class="app-header-logo">VOXEL</span>
           <div class="app-header-meta">
-            {/* Connection status dot */}
-            <span style={{
-              width: "6px",
-              height: "6px",
-              background: connStatus() === "connected" ? "var(--c-speaking)"
-                : connStatus() === "reconnecting" ? "var(--c-warning)"
-                : "var(--c-muted)",
-              display: "inline-block",
-              "flex-shrink": "0",
-              animation: connStatus() === "reconnecting" ? "speaking-pulse 1s ease-in-out infinite" : "none",
-            }} title={connStatus()} />
-            <span>{displayName()}</span>
-            <span class="app-header-sep">/</span>
-            <span>{activeServer()?.name}</span>
             {/* Peer count */}
             <Show when={peers().size > 0}>
-              <span class="app-header-sep">·</span>
               <span style={{ color: "var(--c-speaking)", "font-size": "var(--fs-xs)" }}>
                 {peers().size} connected
               </span>
