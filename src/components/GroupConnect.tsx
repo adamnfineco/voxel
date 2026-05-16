@@ -16,7 +16,9 @@ import {
   IconSpinner,
   IconWifi,
   IconX,
+  IconGear,
 } from "./icons";
+import { Command } from "@tauri-apps/plugin-shell";
 import type { Server } from "../store/servers";
 import { addServer } from "../store/servers";
 import { setDisplayName as saveDisplayName } from "../store/identity";
@@ -181,9 +183,25 @@ const GroupConnect: Component<Props> = (props) => {
         </div>
 
         <Show when={props.connectError}>
-          <div class="connect-form-error row gap-1">
-            <IconWarning size={12} />
-            {props.connectError}
+          <div class="col gap-1">
+            <div class="connect-form-error row gap-1">
+              <IconWarning size={12} />
+              {props.connectError}
+            </div>
+            <Show when={props.connectError?.toLowerCase().includes("not allowed") || props.connectError?.toLowerCase().includes("permission") || props.connectError?.toLowerCase().includes("denied")}>
+              <button
+                class="pixel-btn"
+                style={{ "font-size": "var(--fs-xs)", "align-self": "flex-start" }}
+                onClick={() =>
+                  Command.create("open", [
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+                  ]).execute().catch(() => {})
+                }
+              >
+                <IconGear size={11} />
+                Open Mic Settings
+              </button>
+            </Show>
           </div>
         </Show>
       </div>
