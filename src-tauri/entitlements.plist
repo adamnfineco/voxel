@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Microphone access — required for getUserMedia in WKWebView -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    <!-- Hardened runtime — required for Developer ID distribution -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- Allow unsigned executable memory (needed by some JS engines) -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- Network client — WebRTC + WebSocket -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
