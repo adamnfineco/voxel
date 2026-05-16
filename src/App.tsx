@@ -620,7 +620,7 @@ const App: Component = () => {
           <span class="app-header-logo">VOXEL</span>
           <div style={{ flex: 1 }} />
           <button class="pixel-btn pixel-btn-icon" onClick={() => setView("settings")} title="Settings">
-            <IconGear size={11} />
+            <IconGear size={14} />
           </button>
         </div>
 
@@ -666,7 +666,7 @@ const App: Component = () => {
             title="Settings"
             style={{ "margin-left": "6px" }}
           >
-            <IconGear size={11} />
+            <IconGear size={14} />
           </button>
         </div>
 

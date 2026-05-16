@@ -65,7 +65,7 @@ const ChannelTree: Component<Props> = (props) => {
     const items: MenuItem[] = [
       {
         label: "Join",
-        icon: () => <IconArrowRight size={13} />,
+        icon: () => <IconArrowRight size={15} />,
         action: () => props.onJoinChannel(channel),
       },
     ];
@@ -74,18 +74,18 @@ const ChannelTree: Component<Props> = (props) => {
       items.push({ label: "", action: () => {}, separator: true });
       items.push({
         label: "New sub-channel",
-        icon: () => <IconFolder size={13} />,
+        icon: () => <IconFolder size={15} />,
         action: () => props.onCreateChannel(channel.id),
       });
       items.push({
         label: "Edit",
-        icon: () => <IconPencil size={13} />,
+        icon: () => <IconPencil size={15} />,
         action: () => props.onEditChannel(channel),
       });
       items.push({ label: "", action: () => {}, separator: true });
       items.push({
         label: "Delete channel",
-        icon: () => <IconTrash size={13} />,
+        icon: () => <IconTrash size={15} />,
         action: () => props.onDeleteChannel(channel),
         danger: true,
       });
@@ -95,10 +95,10 @@ const ChannelTree: Component<Props> = (props) => {
   };
 
   const ChannelIcon = (channel: Channel) => {
-    if (channel.is_afk) return <IconMoon size={13} />;
-    if (channel.is_queued) return <IconQueue size={13} />;
-    if (channel.password_hash) return <IconLock size={13} />;
-    return <IconHash size={13} />;
+    if (channel.is_afk) return <IconMoon size={15} />;
+    if (channel.is_queued) return <IconQueue size={15} />;
+    if (channel.password_hash) return <IconLock size={15} />;
+    return <IconHash size={15} />;
   };
 
   const renderChannel = (channel: Channel, depth = 0) => {
@@ -170,7 +170,7 @@ const ChannelTree: Component<Props> = (props) => {
     <div class="channel-tree">
       {/* Server label */}
       <div class="tree-server-name">
-        <IconHash size={11} />
+        <IconHash size={13} />
         {props.serverName}
       </div>
 
@@ -207,7 +207,7 @@ const ChannelTree: Component<Props> = (props) => {
             style={{ width: "100%", "font-size": "var(--fs-xs)", gap: "4px" }}
             onClick={() => props.onCreateChannel()}
           >
-            <IconPlus size={12} />
+            <IconPlus size={14} />
             New Channel
           </button>
         </div>
