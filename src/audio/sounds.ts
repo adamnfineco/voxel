@@ -16,6 +16,7 @@ type SoundEvent =
   | "channel_join"
   | "ptt_start"
   | "ptt_end"
+  | "ptt_blocked"
   | "error"
   | "message";
 
@@ -123,6 +124,24 @@ function playPttEnd(): void {
   tone(900, "square", now, 0.025, 0.12, masterGain());
 }
 
+function playPttBlocked(): void {
+  if (!_ctx) return;
+  const now = _ctx.currentTime;
+  const mg = masterGain();
+  // Flat, deflated — descending short blip, no energy
+  const osc = _ctx.createOscillator();
+  const g = _ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(300, now);
+  osc.frequency.exponentialRampToValueAtTime(180, now + 0.08);
+  g.gain.setValueAtTime(0.18, now);
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+  osc.connect(g);
+  g.connect(mg);
+  osc.start(now);
+  osc.stop(now + 0.1);
+}
+
 function playError(): void {
   if (!_ctx) return;
   const now = _ctx.currentTime;
@@ -158,6 +177,7 @@ export function playSound(event: SoundEvent): void {
     case "channel_join":return playChannelJoin();
     case "ptt_start":   return playPttStart();
     case "ptt_end":     return playPttEnd();
+    case "ptt_blocked": return playPttBlocked();
     case "error":       return playError();
     case "message":     return playMessage();
   }

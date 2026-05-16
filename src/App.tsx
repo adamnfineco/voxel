@@ -20,7 +20,7 @@
  */
 
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { IconGear, IconInfo, IconLock } from "./components/icons";
+import { IconGear, IconLock } from "./components/icons";
 import {
   identity, setIdentity,
   displayName, setDisplayName,
@@ -633,18 +633,10 @@ const App: Component = () => {
             <Show when={peers().size > 0}>
               <span class="app-header-sep">·</span>
               <span style={{ color: "var(--c-speaking)", "font-size": "var(--fs-xs)" }}>
-                {peers().size} peer{peers().size !== 1 ? "s" : ""}
+                {peers().size} connected
               </span>
             </Show>
           </div>
-          <button
-            class="pixel-btn pixel-btn-icon"
-            onClick={openGroupInfo}
-            title="Group Info"
-            style={{ "margin-left": "6px" }}
-          >
-            <IconInfo size={11} />
-          </button>
           <button
             class="pixel-btn pixel-btn-icon"
             onClick={() => setView("settings")}
@@ -672,6 +664,7 @@ const App: Component = () => {
         <MuteBar
           onDisconnect={handleDisconnect}
           onOpenSettings={() => setView("settings")}
+          onOpenGroupInfo={openGroupInfo}
         />
       </Show>
 
