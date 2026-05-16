@@ -157,7 +157,7 @@ const GroupConnect: Component<Props> = (props) => {
       {/* Logo */}
       <div class="connect-logo-wrap">
         <span class="connect-logo">VOXEL</span>
-        <span class="connect-tagline">mesh · peer-to-peer · voice chat</span>
+        <span class="connect-tagline">Mesh Voice Chat</span>
       </div>
 
       {/* Name */}
