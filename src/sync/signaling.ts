@@ -36,6 +36,7 @@ let _serverId = "";
 let _displayName = "";
 let _channelId: string | null = null;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let _pingInterval: ReturnType<typeof setInterval> | null = null;
 let _reconnectArgs: Parameters<typeof connect> | null = null;
 let _connected = false;
 let _intentionalDisconnect = false;
@@ -122,6 +123,12 @@ export async function connect(
         channelId: _channelId,
       });
 
+      // Keepalive ping every 60s — prevents Apache proxy from timing out the WS
+      if (_pingInterval) clearInterval(_pingInterval);
+      _pingInterval = setInterval(() => {
+        send({ type: "ping", from: _peerId, serverId: _serverId });
+      }, 60_000);
+
       resolve();
     };
 
@@ -161,6 +168,7 @@ export function disconnect(): void {
   _intentionalDisconnect = true;
   _connected = false;
 
+  if (_pingInterval) { clearInterval(_pingInterval); _pingInterval = null; }
   if (_reconnectTimer) {
     clearTimeout(_reconnectTimer);
     _reconnectTimer = null;
