@@ -183,13 +183,15 @@ export function disconnect(): void {
 
 function scheduleReconnect(): void {
   if (_reconnectTimer) clearTimeout(_reconnectTimer);
+  // 4s delay — gives the server time to release the old peer name
+  // before we reconnect with the same name
   _reconnectTimer = setTimeout(() => {
     if (_reconnectArgs && !_intentionalDisconnect) {
       connect(..._reconnectArgs).catch((e) =>
         console.error("[signal] reconnect failed:", e)
       );
     }
-  }, 3_000);
+  }, 4_000);
 }
 
 function send(msg: SignalMessage): void {

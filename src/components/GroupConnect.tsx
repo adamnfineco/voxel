@@ -24,7 +24,6 @@ import { addServer } from "../store/servers";
 import { setDisplayName as saveDisplayName } from "../store/identity";
 import { setDisplayName as setStateDisplayName } from "../store/appState";
 import { deriveServerName } from "../runtime/config";
-import { encryptRoomKey } from "../store/keyring";
 
 interface Props {
   groups: Server[];
@@ -106,8 +105,7 @@ const GroupConnect: Component<Props> = (props) => {
     const groupName = createGroupName().trim() || deriveServerName(key());
     setCreateError("");
 
-    const encryptedKey = await encryptRoomKey(key());
-    const server = await addServer(groupName, encryptedKey);
+    const server = await addServer(groupName, key());
     setConnecting(server.id);
     try {
       await props.onConnect(server, name().trim());
@@ -127,8 +125,7 @@ const GroupConnect: Component<Props> = (props) => {
     setJoinError("");
 
     const groupName = joinName().trim() || deriveServerName(k);
-    const encryptedKey = await encryptRoomKey(k);
-    const server = await addServer(groupName, encryptedKey);
+    const server = await addServer(groupName, k);
     setConnecting(server.id);
     try {
       await props.onConnect(server, name().trim());

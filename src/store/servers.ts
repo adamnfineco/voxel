@@ -40,19 +40,37 @@ export async function listServers(): Promise<Server[]> {
   return query<Server>("SELECT * FROM servers ORDER BY last_connected DESC, created_at DESC");
 }
 
+/**
+ * Derive a stable server ID from the plaintext room key.
+ * Every peer entering the same room key must land in the same room
+ * on the signal server — so the ID must be deterministic, not random.
+ * We SHA-256 the plaintext key and take the first 32 hex chars.
+ */
+export async function deriveServerId(plaintextKey: string): Promise<string> {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest("SHA-256", enc.encode(plaintextKey.trim()));
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 32); // 128-bit prefix — enough uniqueness
+}
+
 export async function addServer(
   name: string | null,
-  serverKey: string,
+  plaintextKey: string,
   signalUrl: string = DEFAULT_SIGNAL_URL
 ): Promise<Server> {
-  const id = crypto.randomUUID();
+  // Derive stable ID from plaintext key so all peers share the same room
+  const id = await deriveServerId(plaintextKey);
   const now = Date.now();
-  const resolvedName = (name && name.trim()) ? name.trim() : deriveServerName(serverKey);
+  const resolvedName = (name && name.trim()) ? name.trim() : deriveServerName(plaintextKey);
+
+  // Upsert — if same key was joined before, update name/url but keep the record
   await execute(
-    "INSERT INTO servers (id, name, server_key, signal_url, created_at) VALUES (?, ?, ?, ?, ?)",
-    [id, resolvedName, serverKey, signalUrl, now]
+    `INSERT INTO servers (id, name, server_key, signal_url, created_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name=excluded.name, signal_url=excluded.signal_url`,
+    [id, resolvedName, plaintextKey, signalUrl, now]
   );
-  return { id, name: resolvedName, server_key: serverKey, signal_url: signalUrl, last_connected: null, created_at: now };
+  return { id, name: resolvedName, server_key: plaintextKey, signal_url: signalUrl, last_connected: null, created_at: now };
 }
 
 export async function removeServer(serverId: string): Promise<void> {
