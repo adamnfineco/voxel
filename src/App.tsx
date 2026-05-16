@@ -59,6 +59,7 @@ import {
   setMicMuted as setAudioMicMuted,
   onSpeaking,
   switchInputDevice,
+  setRemotePeerMuted,
 } from "./audio/mesh";
 import { registerPTT, unregisterPTT, onPttChange, getCurrentKey } from "./audio/ptt";
 import { startVAD, stopVAD, onVadActivity } from "./audio/vad";
@@ -145,14 +146,34 @@ const App: Component = () => {
       // Mic level → state (drives meter UI)
       onMicLevel((level) => setMicLevel(level));
 
-      // Remote channel changes
-      onSignalChannelChange((peerId, channelId) => updatePeer(peerId, { channelId }));
+      // Remote channel changes — update state and enforce audio isolation
+      onSignalChannelChange((peerId, channelId) => {
+        updatePeer(peerId, { channelId });
+        enforceChannelAudio(peerId, channelId);
+      });
     } catch (e) {
       const msg = e instanceof Error ? `${e.message}\n${e.stack ?? ""}` : String(e);
       console.error("[app boot]", e);
       setBootError(msg);
     }
   });
+
+  // ─── Channel audio enforcement ────────────────────────────────────────────────
+  // Mute peers who are not in our current channel, unmute those who are.
+
+  const enforceChannelAudio = (peerId: string, _channelId: string | null) => {
+    const myChannel = activeChannel();
+    const inMyChannel = myChannel !== null && _channelId === myChannel.id;
+    setRemotePeerMuted(peerId, !inMyChannel);
+  };
+
+  const enforceAllChannelAudio = () => {
+    const myChannel = activeChannel();
+    for (const [peerId, peer] of peers()) {
+      const inMyChannel = myChannel !== null && peer.channelId === myChannel.id;
+      setRemotePeerMuted(peerId, !inMyChannel);
+    }
+  };
 
   // ─── Audio + Connection teardown (shared between connect failure + disconnect) ──
 
@@ -372,6 +393,8 @@ const App: Component = () => {
     speakChannelJoin(channel.name);
     playSound("channel_join");
     resetAfkTimer();
+    // Enforce audio isolation — mute peers not in this channel
+    enforceAllChannelAudio();
   };
 
   const handleJoinChannel = async (channel: Channel) => {
