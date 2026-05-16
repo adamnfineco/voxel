@@ -5,6 +5,9 @@
     <!-- Microphone access — required for getUserMedia in WKWebView -->
     <key>com.apple.security.device.microphone</key>
     <true/>
+    <!-- Audio input — also required for WKWebView getUserMedia -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
     <!-- Hardened runtime — required for Developer ID distribution -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
