@@ -13,6 +13,7 @@ import { register, unregister, unregisterAll } from "@tauri-apps/plugin-global-s
 import { setMicMuted } from "./mesh";
 import { duck, unduck } from "./ducking";
 import { playSound } from "./sounds";
+import { micMuted } from "../store/appState";
 
 // Default: backtick/tilde key — no typing conflicts, universal reach
 let _pttKey = "Backquote";
@@ -150,6 +151,11 @@ export async function registerPTT(tauriKey: string): Promise<void> {
   try {
     await register(tauriKey, (event) => {
       if (event.state === "Pressed" && !_pttActive) {
+        // If user manually muted the mic, don't transmit — play blocked sound
+        if (micMuted()) {
+          playSound("ptt_blocked");
+          return;
+        }
         _pttActive = true;
         setMicMuted(false);
         duck();

@@ -4,9 +4,9 @@ import {
   IconMicOff,
   IconSpeaker,
   IconSpeakerOff,
-  IconGear,
   IconX,
   IconBroadcast,
+  IconInfo,
 } from "./icons";
 import {
   micMuted, setMicMuted,
@@ -14,7 +14,6 @@ import {
   pttMode, pttActive,
   localSpeaking,
   connected,
-  activeChannel,
 } from "../store/appState";
 import { setMicMuted as setAudioMicMuted, setSoundMuted as setAudioSoundMuted } from "../audio/mesh";
 import MicLevel from "./MicLevel";
@@ -22,6 +21,7 @@ import MicLevel from "./MicLevel";
 interface Props {
   onDisconnect: () => void;
   onOpenSettings: () => void;
+  onOpenGroupInfo: () => void;
 }
 
 const MuteBar: Component<Props> = (props) => {
@@ -35,19 +35,6 @@ const MuteBar: Component<Props> = (props) => {
     const next = !soundMuted();
     setSoundMuted(next);
     setAudioSoundMuted(next);
-  };
-
-  const statusText = () => {
-    if (!connected()) return "disconnected";
-    const ch = activeChannel();
-    if (!ch) return "connected — no channel";
-    return `#${ch.name}`;
-  };
-
-  const statusClass = () => {
-    if (!connected()) return "mute-bar-status";
-    if (localSpeaking() && !micMuted()) return "mute-bar-status is-speaking";
-    return "mute-bar-status is-connected";
   };
 
   const isTalking = () => pttActive() || (!pttMode() && localSpeaking());
@@ -91,27 +78,22 @@ const MuteBar: Component<Props> = (props) => {
         </div>
       </Show>
 
-      {/* Status */}
-      <span class={statusClass()}>
-        {statusText()}
-      </span>
+      <div style={{ flex: 1 }} />
 
       {/* Mic level meter */}
       <Show when={connected() && !micMuted()}>
         <MicLevel />
       </Show>
 
-      {/* Settings */}
-      <button
-        class="pixel-btn pixel-btn-icon"
-        onClick={props.onOpenSettings}
-        title="Settings"
-      >
-        <IconGear size={14} />
-      </button>
-
-      {/* Disconnect */}
+      {/* Group info + disconnect */}
       <Show when={connected()}>
+        <button
+          class="pixel-btn pixel-btn-icon"
+          onClick={props.onOpenGroupInfo}
+          title="Group Info"
+        >
+          <IconInfo size={14} />
+        </button>
         <button
           class="pixel-btn pixel-btn-icon danger"
           onClick={props.onDisconnect}
