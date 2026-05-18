@@ -25,6 +25,8 @@ const UserList: Component<Props> = (props) => {
 
   const handleRightClick = (e: MouseEvent, peer: PeerInfo) => {
     e.preventDefault();
+    const me = identity();
+    if (me?.id === peer.peerId) return; // no menu for self
     setCtxMenu({ x: e.clientX, y: e.clientY, peer });
   };
 
