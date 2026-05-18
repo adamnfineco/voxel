@@ -14,10 +14,12 @@
 #   8. Create a git tag vX.Y.Z
 #
 # Notarization credentials are stored in the macOS keychain (never in the repo).
-# To set up on a new machine: xcrun notarytool store-credentials "VoxelNotarization"
-#   --key ~/.appstore/AuthKey_REDACTED.p8
-#   --key-id "6A4HJRC6R9"
-#   --issuer "2294e5fa-aaf2-4f7d-87f6-0c0541b52ec9"
+# To set up on a new machine:
+#   xcrun notarytool store-credentials "VoxelNotarization" \
+#     --key ~/.appstore/AuthKey_XXXXXXXXXX.p8 \
+#     --key-id "YOUR_KEY_ID" \
+#     --issuer "YOUR_ISSUER_UUID"
+# Get these values from App Store Connect → Users and Access → Integrations → API Keys
 
 set -euo pipefail
 
@@ -87,15 +89,15 @@ echo "   OK versions updated"
 # ── Step 5: Build Tauri app ───────────────────────────────────────────────────
 
 echo "── Building Tauri app..."
-# Tauri's codesign step fails when the project is inside iCloud Drive (xattrs).
-# We let the build finish, then sign manually from a staging dir outside iCloud.
-cargo tauri build --target aarch64-apple-darwin --no-bundle 2>/dev/null || \
-  cargo tauri build --target aarch64-apple-darwin || true
+# When the project lives in iCloud Drive, Tauri's own codesign step fails with
+# "resource fork / detritus not allowed". The .app bundle is already produced
+# before that step, so we allow the build to "fail" and sign manually below.
+cargo tauri build --target aarch64-apple-darwin 2>&1 | grep -v "^$" || true
 
 APP_SRC="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
 
 if [[ ! -d "$APP_SRC" ]]; then
-  echo "ERROR: .app not found — build likely failed"
+  echo "ERROR: .app not found at $APP_SRC — build likely failed before bundling"
   exit 1
 fi
 echo "   OK build complete"
@@ -154,8 +156,8 @@ echo "   OK installed + opened locally"
 
 # ── Install on Stinabook ──────────────────────────────────────────────────────
 
-STINABOOK="cnocito@macbook-pro.dolly-ruler.ts.net"
-if ssh -o ConnectTimeout=5 "$STINABOOK" "echo ok" &>/dev/null; then
+STINABOOK="${VOXEL_STINABOOK:-}"  # set env var or leave blank to skip
+if [[ -n "$STINABOOK" ]] && ssh -o ConnectTimeout=5 "$STINABOOK" "echo ok" &>/dev/null; then
   echo "── Installing on Stinabook..."
   ssh "$STINABOOK" "pkill -x voxel 2>/dev/null; pkill -x voxel-signal 2>/dev/null; sleep 1; rm -rf /Applications/Voxel.app"
   scp -r "$APP_PATH" "$STINABOOK:/Applications/Voxel.app"
