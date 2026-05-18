@@ -1,0 +1,327 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build voxel-signal sidecar for each platform ─────────────────────────────
+  build-signal:
+    name: Build signal server (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary: voxel-signal-aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: voxel-signal-x86_64-pc-windows-msvc.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-signal-${{ hashFiles('signal/Cargo.toml') }}
+
+      - name: Build signal server
+        shell: bash
+        run: cargo build --release --manifest-path signal/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Stage sidecar binary (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p src-tauri/binaries
+          cp target/${{ matrix.target }}/release/voxel-signal \
+             src-tauri/binaries/${{ matrix.binary }}
+
+      - name: Stage sidecar binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries
+          Copy-Item target/${{ matrix.target }}/release/voxel-signal.exe `
+            src-tauri/binaries/${{ matrix.binary }}
+
+      - name: Upload sidecar
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidecar-${{ matrix.target }}
+          path: src-tauri/binaries/${{ matrix.binary }}
+
+  # ── macOS release (notarized) ─────────────────────────────────────────────────
+  release-macos:
+    name: Release macOS (aarch64)
+    runs-on: macos-latest
+    needs: build-signal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-tauri-${{ hashFiles('src-tauri/Cargo.toml') }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Download macOS sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: sidecar-aarch64-apple-darwin
+          path: src-tauri/binaries/
+
+      - name: Make sidecar executable
+        run: chmod +x src-tauri/binaries/voxel-signal-aarch64-apple-darwin
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
+          CERT_PATH=$RUNNER_TEMP/cert.p12
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "" "$KEYCHAIN_PATH"
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Build Tauri app (macOS)
+        env:
+          APPLE_SIGNING_IDENTITY: "Developer ID Application: REDACTED"
+        run: |
+          cargo tauri build --target aarch64-apple-darwin 2>&1 || true
+          if [[ ! -d "target/aarch64-apple-darwin/release/bundle/macos/Voxel.app" ]]; then
+            echo "ERROR: .app bundle not found"
+            exit 1
+          fi
+
+      - name: Sign app
+        run: |
+          APP="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
+          xattr -rc "$APP"
+          codesign --force --deep \
+            --sign "Developer ID Application: REDACTED" \
+            --options runtime "$APP"
+          codesign --verify --deep --strict "$APP"
+
+      - name: Notarize
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          APP="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Write API key to temp file
+          KEY_PATH=$RUNNER_TEMP/AuthKey.p8
+          echo "$APPLE_API_KEY_CONTENT" > "$KEY_PATH"
+
+          # Zip for notarization
+          ZIP="$RUNNER_TEMP/Voxel_notarize.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+
+          xcrun notarytool submit "$ZIP" \
+            --key "$KEY_PATH" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          rm -f "$KEY_PATH" "$ZIP"
+
+      - name: Package artifacts
+        id: package
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          APP="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
+          STAGING="$RUNNER_TEMP/dist"
+          mkdir -p "$STAGING"
+
+          ZIP="$STAGING/Voxel-v${VERSION}-macos-aarch64.zip"
+          DMG="$STAGING/Voxel_${VERSION}_aarch64.dmg"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+          hdiutil create -volname "Voxel" -srcfolder "$APP" -ov -format UDZO "$DMG"
+
+          echo "ZIP=$ZIP" >> $GITHUB_OUTPUT
+          echo "DMG=$DMG" >> $GITHUB_OUTPUT
+          echo "ZIP_NAME=Voxel-v${VERSION}-macos-aarch64.zip" >> $GITHUB_OUTPUT
+          echo "DMG_NAME=Voxel_${VERSION}_aarch64.dmg" >> $GITHUB_OUTPUT
+
+      - name: Upload macOS ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.ZIP_NAME }}
+          path: ${{ steps.package.outputs.ZIP }}
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.DMG_NAME }}
+          path: ${{ steps.package.outputs.DMG }}
+
+  # ── Windows release ───────────────────────────────────────────────────────────
+  release-windows:
+    name: Release Windows (x86_64)
+    runs-on: windows-latest
+    needs: build-signal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-cargo-tauri-${{ hashFiles('src-tauri/Cargo.toml') }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Download Windows sidecar
+        uses: actions/download-artifact@v4
+        with:
+          name: sidecar-x86_64-pc-windows-msvc
+          path: src-tauri/binaries/
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --skipLibCheck
+
+      - name: Build Tauri app (Windows)
+        run: cargo tauri build --target x86_64-pc-windows-msvc
+
+      - name: Collect artifacts
+        id: collect
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          BUNDLE="target/x86_64-pc-windows-msvc/release/bundle"
+
+          # Tauri produces both .msi and NSIS .exe — grab whichever exist
+          MSI=$(find "$BUNDLE/msi" -name "*.msi" 2>/dev/null | head -1 || true)
+          NSIS=$(find "$BUNDLE/nsis" -name "*.exe" 2>/dev/null | head -1 || true)
+
+          echo "MSI=$MSI" >> $GITHUB_OUTPUT
+          echo "NSIS=$NSIS" >> $GITHUB_OUTPUT
+
+      - name: Upload Windows MSI
+        if: steps.collect.outputs.MSI != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voxel-v${{ steps.version.outputs.VERSION }}-windows-x86_64.msi
+          path: ${{ steps.collect.outputs.MSI }}
+
+      - name: Upload Windows installer
+        if: steps.collect.outputs.NSIS != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voxel-v${{ steps.version.outputs.VERSION }}-windows-x86_64-setup.exe
+          path: ${{ steps.collect.outputs.NSIS }}
+
+  # ── Create GitHub release with all artifacts ──────────────────────────────────
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [release-macos, release-windows]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: List artifacts
+        run: find dist/ -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Voxel v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## Voxel v${{ steps.version.outputs.VERSION }}
+
+            Retro mesh voice chat — Ventrilo-inspired, peer-to-peer audio.
+
+            ### Downloads
+
+            | Platform | File |
+            |----------|------|
+            | macOS Apple Silicon | `Voxel-v${{ steps.version.outputs.VERSION }}-macos-aarch64.zip` or `.dmg` |
+            | Windows x86_64 | `Voxel-v${{ steps.version.outputs.VERSION }}-windows-x86_64.msi` or `-setup.exe` |
+
+            **macOS**: Notarized — Gatekeeper-clean, no warnings.
+            **Windows**: Standard MSVC build. Windows may show SmartScreen on first run (unsigned); click "More info → Run anyway."
+          files: dist/**/*
+          draft: false
+          prerelease: false
