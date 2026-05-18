@@ -34,7 +34,7 @@ Then the question came: can we make it serverless? The whole thing is mesh, ever
 
 10. **"You cannot default to spacebar, it breaks typing."** — Switched default PTT to `` ` `` (Backquote). Zero typing conflicts. Also fixed modifier combo capture — `Ctrl+A`, `Alt+1` etc. now work as PTT keys.
 
-11. **"Stina connected to the same server but we didn't find each other."** — Root cause: sidecar spawns a local server on each machine. Two `localhost:8080` instances that never talk. Fixed by deploying `voxel-signal` on `your-server.example.com:8080` as the shared rendezvous. Domain `voxel.damnfine.xyz` being set up.
+11. **"Two people couldn't find each other."** — Root cause: sidecar spawns a local server on each machine. Two `localhost:8080` instances that never talk to each other. Fixed by deploying `voxel-signal` on a shared public host as the rendezvous. `DEFAULT_SIGNAL_URL` in `src/runtime/config.ts` points there.
 
 12. **"You cannot bind multi keys with modifiers (e.g. Ctrl+A)."** — Fixed. `eventToTauriKey()` captures the full modifier combo during keybind setup. Pure modifier presses are ignored — waits for an actual key.
 
@@ -64,16 +64,14 @@ Full ADR records in `docs/adr/` — this is the condensed version.
 
 ### Rendezvous server
 
-- Running on `voxel.damnfine.xyz` — dedicated Virtualmin account on dfn01
-- Binary: `/home/voxel/bin/voxel-signal` — built from `signal/` in the repo
-- Managed by systemd: `systemctl status voxel-signal`
-- Logs: `journalctl -u voxel-signal -f`
-- Binds to `127.0.0.1:8765`, Apache proxies `wss://voxel.damnfine.xyz` → it
-- Restart: `systemctl restart voxel-signal`
-- Redeploy: `./scripts/deploy-signal.sh` (cross-compiles locally, SCPs binary, restarts)
-- `DEFAULT_SIGNAL_URL` in `src/runtime/config.ts` is `wss://voxel.damnfine.xyz` ✓
+- Public handshake server at `wss://voxel.damnfine.xyz` — handles peer discovery only, never audio
+- Binary built from `signal/` in this repo — see `signal/deploy/` for setup instructions
+- Managed by systemd on the host — auto-restarts on crash/reboot
+- Binds locally, Apache proxies WebSocket connections through TLS
+- Redeploy: `VOXEL_SIGNAL_HOST=user@yourserver ./scripts/deploy-signal.sh`
+- `DEFAULT_SIGNAL_URL` in `src/runtime/config.ts` points here ✓
 
-### Signal URL is now user-configurable
+### Signal URL is user-configurable
 
 Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`. Persisted in `app_prefs` SQLite table. Self-hosters can point it at their own instance. Takes effect on next connect.
 
@@ -103,7 +101,7 @@ Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`
 ### Infrastructure
 - Rust rendezvous server hidden from users
 - Embedded sidecar binary in app bundle — auto-spawns if no external server reachable
-- Hosted rendezvous on dfn01 for real-world testing
+  - Hosted rendezvous server for real-world use
 - HMAC auth on gossip, message size limits, input validation, room isolation
 - 21-test integration suite: `npm test`
 
@@ -135,7 +133,7 @@ Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`
 ### Must-have before v0.1.0
 
 - [ ] **End-to-end voice validated** — two real people on different machines, talking to each other. Mark + Stina test. Nothing else matters until this works.
-- [x] **`voxel.damnfine.xyz` domain + WebSocket proxy** — Virtualmin account + Apache vhost + systemd + TLS. Done.
+- [x] **`voxel.damnfine.xyz` domain + WebSocket proxy** — Apache vhost + systemd + TLS. Done.
 - [ ] **PTT confirmed backgrounded** — global hotkey fires correctly when Voxel is in background.
 - [ ] **Channel switch sounds actually play** — AudioContext may be suspended at play time in some flows.
 - [ ] **xattr documented in README** — so anyone distributing the .app knows about the macOS quarantine issue.
@@ -145,18 +143,18 @@ Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`
 - [ ] **Reconnect UX** — show "reconnecting..." when signaling drops. Currently shows stale "connected" state.
 - [ ] **Name-taken UX** — server sends `name_taken`, frontend handles it, needs real-world test.
 - [ ] **AFK channel sync** — when peer A moves user B to AFK, does B's client actually receive the gossip? Untested.
-- [ ] **Make rendezvous server resilient** — currently a bare background process on dfn01. Needs: systemd unit file so it auto-restarts on crash/reboot.
+- [ ] **Make rendezvous server resilient** — needs systemd unit file so it auto-restarts on crash/reboot.
 - [ ] **Promote/demote admin end-to-end** — gossip layer + right-click menu both work, needs real multi-peer test.
 
 ### Medium priority (v0.2.0)
 
-- [ ] **`wss://` + TLS** — once Apache proxy is live, add Let's Encrypt cert via Virtualmin. Moves from `ws://` to `wss://`.
+- [ ] **`wss://` + TLS** — once Apache proxy is live, add Let's Encrypt cert. Moves from `ws://` to `wss://`.
 - [ ] **Sidecar address sharing** — encode rendezvous host in group key so LAN/self-hosted works without a central server. Format: `word-word-NNN@host:port`. See ADR-011.
 - [ ] **Key rotation** — "regenerate key" in Group Info for when a key leaks.
 - [ ] **User comment field** — per-user comments visible to others in channel tree.
 - [ ] **Forward secrecy** — current E2EE has no forward secrecy. Signal-style ratchet is the upgrade path.
 - [ ] **macOS Keychain storage** — room keys currently encrypted via UUID-derived key. `tauri-plugin-stronghold` when it stabilises.
-- [ ] **Systemd service for voxel-signal** — so dfn01 rendezvous survives reboots.
+- [ ] **Systemd service for voxel-signal** — so the rendezvous server survives reboots.
 
 ### Low priority / polish
 
@@ -203,7 +201,7 @@ Settings → About → Rendezvous Server. Defaults to `wss://voxel.damnfine.xyz`
 | Settings output device dropdown not wired | Low | WebRTC output routing is browser-controlled |
 | Group info modal shows peer/channel count as 0 in saved groups list | Low | Counts only meaningful when connected — fine for context |
 | xattr quarantine blocks install on first open | Medium | `xattr -cr Voxel.app` fixes it. Needs README note. |
-| ~~voxel-signal bare bg process~~ | ~~High~~ | Fixed — systemd on voxel.damnfine.xyz, auto-restarts |
+| ~~voxel-signal bare bg process~~ | ~~High~~ | Fixed — systemd unit deployed, auto-restarts |
 
 ---
 
@@ -223,10 +221,9 @@ v1.0.0           ← production-grade, multiple platforms, full E2EE verified
 
 ## Immediate Next Action
 
-1. Set up `voxel.damnfine.xyz` Virtualmin account + Apache WebSocket proxy
-2. Test voice between Mark + Stina with the hosted rendezvous
+1. Get rendezvous server live at `voxel.damnfine.xyz` (Apache WebSocket proxy + systemd)
+2. Test voice between two people on different networks
 3. If it works → tag `v0.1.0-beta.1`
-4. Set up systemd for voxel-signal so dfn01 stays up
 
 ---
 
@@ -269,6 +266,6 @@ scripts/release.sh             build automation
 
 Get Mark and Stina's voices through to each other.
 
-`voxel.damnfine.xyz` → Apache proxy → `voxel-signal:8080` → two clients find each other → WebRTC connects → audio flows.
+`voxel.damnfine.xyz` (handshake only) → two clients find each other → WebRTC connects → audio flows peer-to-peer.
 
 That's v0.1.0-beta.1.

@@ -44,8 +44,8 @@
     "macOS": {
       "infoPlist": "Info.plist",
       "exceptionDomain": null,
-      "signingIdentity": "Developer ID Application: REDACTED",
-      "providerShortName": "REDACTED_TEAM_ID",
+      "signingIdentity": null,
+      "providerShortName": null,
       "entitlements": "entitlements.plist",
       "minimumSystemVersion": "10.15"
     }

@@ -15,7 +15,12 @@ cd "$(dirname "$0")/.."
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-SERVER="user@your-server.example.com"
+# Set VOXEL_SIGNAL_HOST to your server's SSH target, e.g. user@your-server.example.com
+SERVER="${VOXEL_SIGNAL_HOST:-}"
+if [[ -z "$SERVER" ]]; then
+  echo "ERROR: VOXEL_SIGNAL_HOST env var not set (e.g. user@your-server.example.com)"
+  exit 1
+fi
 REMOTE_BIN="/home/voxel/bin/voxel-signal"
 SERVICE="voxel-signal"
 TARGET="x86_64-unknown-linux-gnu"
@@ -79,4 +84,4 @@ echo "── Recent logs:"
 ssh "$SERVER" "sudo journalctl -u $SERVICE -n 10 --no-pager"
 
 echo ""
-echo "Done. voxel-signal is live at wss://voxel.damnfine.xyz"
+echo "Done. voxel-signal deployed to $SERVER"

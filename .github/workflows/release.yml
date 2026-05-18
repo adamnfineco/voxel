@@ -131,7 +131,7 @@ jobs:
 
       - name: Build Tauri app (macOS)
         env:
-          APPLE_SIGNING_IDENTITY: "Developer ID Application: REDACTED"
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           npx tauri build --target aarch64-apple-darwin 2>&1 || true
           if [[ ! -d "target/aarch64-apple-darwin/release/bundle/macos/Voxel.app" ]]; then
@@ -140,11 +140,13 @@ jobs:
           fi
 
       - name: Sign app
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           APP="target/aarch64-apple-darwin/release/bundle/macos/Voxel.app"
           xattr -rc "$APP"
           codesign --force --deep \
-            --sign "Developer ID Application: REDACTED" \
+            --sign "$APPLE_SIGNING_IDENTITY" \
             --options runtime "$APP"
           codesign --verify --deep --strict "$APP"
 
@@ -158,7 +160,7 @@ jobs:
           VERSION=${{ steps.version.outputs.VERSION }}
 
           # Write API key to temp file
-          KEY_PATH=$RUNNER_TEMP/AuthKey.p8
+          KEY_PATH=$RUNNER_TEMP/notary-key.p8
           echo "$APPLE_API_KEY_CONTENT" > "$KEY_PATH"
 
           # Zip for notarization

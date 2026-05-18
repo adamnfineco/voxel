@@ -7,16 +7,19 @@
 #   1. Typecheck + signal server tests
 #   2. Build Rust signal server + bundle as sidecar
 #   3. Update version numbers
-#   4. Build Tauri .app (signed with Developer ID: A Damn Fine Co)
+#   4. Build Tauri .app (signed with Developer ID certificate)
 #   5. Notarize + staple (uses keychain profile "VoxelNotarization")
 #   6. Package as zip + DMG
 #   7. Install locally + on Stinabook
 #   8. Create a git tag vX.Y.Z
 #
+# Requires env var:
+#   APPLE_SIGNING_IDENTITY — the full "Developer ID Application: ..." string
+#
 # Notarization credentials are stored in the macOS keychain (never in the repo).
-# To set up on a new machine:
+# To set up on a new machine, store credentials under the "VoxelNotarization" profile:
 #   xcrun notarytool store-credentials "VoxelNotarization" \
-#     --key ~/.appstore/AuthKey_XXXXXXXXXX.p8 \
+#     --key /path/to/your/AuthKey.p8 \
 #     --key-id "YOUR_KEY_ID" \
 #     --issuer "YOUR_ISSUER_UUID"
 # Get these values from App Store Connect → Users and Access → Integrations → API Keys
@@ -111,12 +114,16 @@ echo "── Signing (via staging dir to avoid iCloud xattr issue)..."
 rm -rf "$STAGING" && mkdir -p "$STAGING"
 cp -R "$APP_SRC" "$APP_PATH"
 xattr -rc "$APP_PATH"
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  echo "ERROR: APPLE_SIGNING_IDENTITY env var not set"
+  exit 1
+fi
 codesign --force --deep \
-  --sign "Developer ID Application: REDACTED" \
+  --sign "$APPLE_SIGNING_IDENTITY" \
   --options runtime \
   "$APP_PATH" 2>&1
 codesign --verify --deep --strict "$APP_PATH"
-echo "   OK signed: Developer ID Application: REDACTED"
+echo "   OK signed: $APPLE_SIGNING_IDENTITY"
 
 # ── Step 7: Notarize + staple ─────────────────────────────────────────────────
 

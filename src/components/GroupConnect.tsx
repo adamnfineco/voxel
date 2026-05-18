@@ -120,11 +120,19 @@ const GroupConnect: Component<Props> = (props) => {
     }
   };
 
+  const validateKey = (k: string): string | null => {
+    if (!k) return "Enter the group key.";
+    // Expected format: word-word-NNN (e.g. echo-golf-491)
+    if (!/^[a-z]+-[a-z]+-\d{3}$/.test(k)) return "Key format: word-word-123";
+    return null;
+  };
+
   const handleJoin = async () => {
     const nameErr = validateName();
     if (nameErr) { setJoinError(nameErr); return; }
-    const k = joinKey().trim();
-    if (!k) { setJoinError("Enter the group key."); return; }
+    const k = joinKey().trim().toLowerCase();
+    const keyErr = validateKey(k);
+    if (keyErr) { setJoinError(keyErr); return; }
     setJoinError("");
     const groupName = joinName().trim() || deriveServerName(k);
     const server = await addServer(groupName, k);
@@ -353,7 +361,7 @@ const GroupConnect: Component<Props> = (props) => {
               type="text"
               placeholder="echo-golf-491"
               value={joinKey()}
-              onInput={(e) => setJoinKey(e.currentTarget.value)}
+              onInput={(e) => setJoinKey(e.currentTarget.value.toLowerCase())}
               onKeyDown={(e) => e.key === "Enter" && handleJoin()}
               autocomplete="off"
               autocorrect="off"
