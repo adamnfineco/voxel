@@ -7,11 +7,17 @@
 #   1. Typecheck + signal server tests
 #   2. Build Rust signal server + bundle as sidecar
 #   3. Update version numbers
-#   4. Build Tauri .app + .dmg (signed with Developer ID: A Damn Fine Co)
-#   5. Create a git tag vX.Y.Z
+#   4. Build Tauri .app (signed with Developer ID: A Damn Fine Co)
+#   5. Notarize + staple (uses keychain profile "VoxelNotarization")
+#   6. Package as zip + DMG
+#   7. Install locally + on Stinabook
+#   8. Create a git tag vX.Y.Z
 #
-# Notarization (for zero-prompt public releases) is a separate step.
-# For test distribution, signing alone is sufficient — right-click → Open.
+# Notarization credentials are stored in the macOS keychain (never in the repo).
+# To set up on a new machine: xcrun notarytool store-credentials "VoxelNotarization"
+#   --key ~/.appstore/AuthKey_REDACTED.p8
+#   --key-id "6A4HJRC6R9"
+#   --issuer "2294e5fa-aaf2-4f7d-87f6-0c0541b52ec9"
 
 set -euo pipefail
 
@@ -110,7 +116,25 @@ codesign --force --deep \
 codesign --verify --deep --strict "$APP_PATH"
 echo "   OK signed: Developer ID Application: REDACTED"
 
-# ── Build DMG from signed app ─────────────────────────────────────────────────
+# ── Step 7: Notarize + staple ─────────────────────────────────────────────────
+
+ZIP_FOR_NOTARY="$STAGING/Voxel_notarize.zip"
+echo "── Notarizing (this takes ~1-2 minutes)..."
+ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_FOR_NOTARY"
+xcrun notarytool submit "$ZIP_FOR_NOTARY" \
+  --keychain-profile "VoxelNotarization" \
+  --wait
+echo "── Stapling notarization ticket..."
+xcrun stapler staple "$APP_PATH"
+xcrun stapler validate "$APP_PATH"
+rm -f "$ZIP_FOR_NOTARY"
+echo "   OK notarized + stapled"
+
+# ── Package for distribution ──────────────────────────────────────────────────
+
+ZIP_PATH="$STAGING/Voxel-v${VERSION}-macos-aarch64.zip"
+ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_PATH"
+echo "   OK zip: $ZIP_PATH ($(du -h "$ZIP_PATH" | cut -f1))"
 
 DMG_PATH="$STAGING/Voxel_${VERSION}_aarch64.dmg"
 hdiutil create -volname "Voxel" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_PATH" 2>&1
@@ -152,10 +176,18 @@ if [[ "$confirm" =~ ^[Yy]$ ]]; then
   git push origin main
   git push origin "v${VERSION}"
   echo "   OK tagged v${VERSION} and pushed"
+
+  read -p "Create GitHub release and upload artifacts? [y/N] " ghconfirm
+  if [[ "$ghconfirm" =~ ^[Yy]$ ]]; then
+    gh release create "v${VERSION}" \
+      --title "Voxel v${VERSION}" \
+      --notes "Voxel v${VERSION} — notarized macOS build for Apple Silicon." \
+      "$ZIP_PATH" "$DMG_PATH"
+    echo "   OK GitHub release created with artifacts"
+  fi
 fi
 
 echo ""
-echo "Done! Voxel v${VERSION} — signed by A Damn Fine Co"
-if [[ -n "$DMG_PATH" ]]; then
-  echo "   DMG: $DMG_PATH"
-fi
+echo "Done! Voxel v${VERSION} — signed + notarized by A Damn Fine Co"
+echo "   ZIP: $ZIP_PATH"
+echo "   DMG: $DMG_PATH"
