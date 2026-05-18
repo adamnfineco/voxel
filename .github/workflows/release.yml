@@ -133,7 +133,7 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: "Developer ID Application: REDACTED"
         run: |
-          cargo tauri build --target aarch64-apple-darwin 2>&1 || true
+          npx tauri build --target aarch64-apple-darwin 2>&1 || true
           if [[ ! -d "target/aarch64-apple-darwin/release/bundle/macos/Voxel.app" ]]; then
             echo "ERROR: .app bundle not found"
             exit 1
@@ -253,7 +253,7 @@ jobs:
         run: npx tsc --noEmit --skipLibCheck
 
       - name: Build Tauri app (Windows)
-        run: cargo tauri build --target x86_64-pc-windows-msvc
+        run: npx tauri build --target x86_64-pc-windows-msvc
 
       - name: Collect artifacts
         id: collect
